@@ -2,6 +2,9 @@
   "functions": {
     "api/generate-topic.js": {
       "maxDuration": 300
+    },
+    "api/shared-topics.js": {
+      "maxDuration": 60
     }
   }
 }
