@@ -86,7 +86,7 @@
                 </div>
                 <div>
                     <h1 class="text-xl font-black tracking-wider bg-gradient-to-r from-blue-400 via-indigo-300 to-amber-300 bg-clip-text text-transparent">
-                        注音急轉彎 <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">全題庫競賽版</span>
+                        注音急轉彎 <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">v3.2 共享題庫版</span>
                     </h1>
                     <p class="text-xs text-slate-400 hidden sm:block">主持人派對活動與搶答主控台</p>
                 </div>
@@ -120,7 +120,7 @@
                         <i class="fa-solid fa-gamepad text-amber-400 mr-3"></i>團康競賽準備區
                     </h2>
                     <p class="text-slate-300 text-sm max-w-2xl">
-                        可使用內建題庫，也可輸入任何主題，由 AI 即時搜尋、驗證並建立符合「注音急轉彎」規則的新題庫。固定題庫即使 AI 連線失敗仍可正常使用！
+                        可使用內建題庫，也可由 AI 即時搜尋並建立新題庫；AI 題庫會同步到共享雲端，其他裝置開啟同一網址即可使用。若 AI 題數不足，本場會從 119 題內建題庫隨機補滿並整體亂序。
                     </p>
                 </div>
             </div>
@@ -179,6 +179,9 @@
                             <h3 class="text-lg font-bold text-slate-200 flex items-center">
                                 <i class="fa-solid fa-list-check text-indigo-400 mr-2"></i>選擇競賽主題
                             </h3>
+                            <button type="button" onclick="loadSharedTopicDatabases({ silent: false })" class="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 transition" title="從雲端重新載入共享 AI 題庫">
+                                <i class="fa-solid fa-cloud-arrow-down mr-1"></i>更新共享題庫
+                            </button>
                         </div>
                         <!-- Topics Cards Grid -->
                         <div id="topicsGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-72 overflow-y-auto pr-2">
@@ -196,7 +199,7 @@
                                             </span>
                                             <h4 class="font-black text-white">AI 動態出題</h4>
                                         </div>
-                                        <p class="text-xs text-slate-400 mt-2">輸入主題後，系統會即時搜尋相關詞彙、檢查注音規則，再建立臨時題庫。</p>
+                                        <p class="text-xs text-slate-400 mt-2">輸入主題後，系統會即時搜尋相關詞彙、檢查注音規則，再同步到共享題庫；題數不足會由本地固定題庫補足遊戲設定題數。</p>
                                     </div>
                                     <span class="text-[10px] font-black tracking-wider text-fuchsia-300 bg-fuchsia-500/10 border border-fuchsia-500/20 px-2 py-1 rounded-full">ONLINE</span>
                                 </div>
@@ -431,9 +434,12 @@
         let selectedTopicKey = "ALL";
         let currentHintStep = 0;
 
-        // AI 動態題庫：只存在瀏覽器本機，不會改動內建題庫。
+        // AI 動態題庫：雲端共享為主，本機 localStorage 作為 Blob 尚未設定或暫時失敗時的備援。
         const CUSTOM_TOPIC_STORAGE_KEY = "zhuyinRushCustomTopicsV3";
         let CUSTOM_TOPIC_DATABASES = {};
+        let SHARED_TOPIC_DATABASES = {};
+        let SHARED_TOPIC_METADATA = {};
+        let sharedTopicsLoaded = false;
         let aiGenerationProgressTimer = null;
         
         // Web Audio API Synth Engine
@@ -773,7 +779,7 @@
                 const parsed = raw ? JSON.parse(raw) : {};
                 CUSTOM_TOPIC_DATABASES = (parsed && typeof parsed === "object") ? parsed : {};
             } catch (error) {
-                console.warn("無法讀取 AI 自訂題庫：", error);
+                console.warn("無法讀取 AI 本機備援題庫：", error);
                 CUSTOM_TOPIC_DATABASES = {};
             }
         }
@@ -782,20 +788,81 @@
             try {
                 localStorage.setItem(CUSTOM_TOPIC_STORAGE_KEY, JSON.stringify(CUSTOM_TOPIC_DATABASES));
             } catch (error) {
-                console.warn("無法儲存 AI 自訂題庫：", error);
+                console.warn("無法儲存 AI 本機備援題庫：", error);
             }
         }
 
+        function sharedTopicKey(topic) {
+            return `SHARED｜${String(topic || "").replace(/^(AI|SHARED|共享)｜/, "")}`;
+        }
+
+        function localTopicKey(topic) {
+            return `AI｜${String(topic || "").replace(/^(AI|SHARED|共享)｜/, "")}`;
+        }
+
         function getAllTopicDatabases() {
-            return { ...PRESET_TOPIC_DATABASES, ...CUSTOM_TOPIC_DATABASES };
+            return { ...PRESET_TOPIC_DATABASES, ...SHARED_TOPIC_DATABASES, ...CUSTOM_TOPIC_DATABASES };
         }
 
         function isCustomTopicKey(key) {
             return Object.prototype.hasOwnProperty.call(CUSTOM_TOPIC_DATABASES, key);
         }
 
+        function isSharedTopicKey(key) {
+            return Object.prototype.hasOwnProperty.call(SHARED_TOPIC_DATABASES, key);
+        }
+
+        function isAITopicKey(key) {
+            return isCustomTopicKey(key) || isSharedTopicKey(key);
+        }
+
         function displayTopicName(key) {
-            return isCustomTopicKey(key) ? key.replace(/^AI｜/, "") : key;
+            return String(key || "").replace(/^(AI|SHARED|共享)｜/, "");
+        }
+
+        async function loadSharedTopicDatabases({ silent = true } = {}) {
+            if (location.protocol === "file:") return;
+            try {
+                const response = await fetch(`/api/shared-topics?t=${Date.now()}`, { cache: "no-store" });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(payload.error || `共享題庫讀取失敗（HTTP ${response.status}）`);
+
+                const nextShared = {};
+                const nextMetadata = {};
+                for (const item of (payload.topics || [])) {
+                    if (!item?.topic || !Array.isArray(item.questions) || item.questions.length === 0) continue;
+                    const key = sharedTopicKey(item.topic);
+                    nextShared[key] = item.questions.map(q => ({
+                        zhuyin: q.zhuyin,
+                        answers: (q.answers || []).map(a => ({ word: a.word, clue: a.clue })),
+                        __ai: true,
+                        __shared: true
+                    }));
+                    nextMetadata[key] = {
+                        id: item.id || "",
+                        topic: item.topic,
+                        difficulty: item.difficulty || "standard",
+                        mode: item.mode || "smart",
+                        createdAt: item.createdAt || "",
+                        blobUrl: item.blobUrl || ""
+                    };
+
+                    // 若這個主題已成功存在共享雲端，就移除同名的本機備援副本，避免出現兩張卡。
+                    const fallbackKey = localTopicKey(item.topic);
+                    if (CUSTOM_TOPIC_DATABASES[fallbackKey]) delete CUSTOM_TOPIC_DATABASES[fallbackKey];
+                }
+                SHARED_TOPIC_DATABASES = nextShared;
+                SHARED_TOPIC_METADATA = nextMetadata;
+                sharedTopicsLoaded = true;
+                persistCustomTopicDatabases();
+                renderTopicsGrid();
+                if (!silent) showToast("共享題庫已更新", `目前載入 ${Object.keys(SHARED_TOPIC_DATABASES).length} 個共享 AI 題庫。`);
+            } catch (error) {
+                console.warn("共享題庫載入失敗：", error);
+                sharedTopicsLoaded = false;
+                renderTopicsGrid();
+                if (!silent) showToast("共享題庫暫時無法讀取", escapeHTML(error.message || "固定題庫仍可正常使用。"));
+            }
         }
 
         function removeCustomTopic(key, event) {
@@ -805,12 +872,39 @@
             }
             if (!isCustomTopicKey(key)) return;
             const displayName = displayTopicName(key);
-            if (!confirm(`要刪除 AI 題庫「${displayName}」嗎？`)) return;
+            if (!confirm(`要刪除本機備援 AI 題庫「${displayName}」嗎？`)) return;
             delete CUSTOM_TOPIC_DATABASES[key];
             persistCustomTopicDatabases();
             if (selectedTopicKey === key) selectedTopicKey = "ALL";
             renderTopicsGrid();
-            showToast("已刪除 AI 題庫", `「${escapeHTML(displayName)}」已從這台裝置移除。`);
+            showToast("已刪除本機題庫", `「${escapeHTML(displayName)}」已從這台裝置移除。`);
+        }
+
+        async function removeSharedTopic(key, event) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+            if (!isSharedTopicKey(key)) return;
+            const displayName = displayTopicName(key);
+            if (!confirm(`要從所有裝置的共享題庫中刪除「${displayName}」嗎？`)) return;
+            const accessCode = document.getElementById("aiAccessCode")?.value || "";
+            try {
+                const response = await fetch("/api/shared-topics", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "delete", topic: displayName, accessCode })
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(payload.error || `刪除失敗（HTTP ${response.status}）`);
+                delete SHARED_TOPIC_DATABASES[key];
+                delete SHARED_TOPIC_METADATA[key];
+                if (selectedTopicKey === key) selectedTopicKey = "ALL";
+                renderTopicsGrid();
+                showToast("共享題庫已刪除", `「${escapeHTML(displayName)}」已從雲端移除。`);
+            } catch (error) {
+                showToast("刪除失敗", escapeHTML(error.message || "請確認連線密碼與雲端儲存設定。"));
+            }
         }
 
         function initializeApp() {
@@ -823,6 +917,8 @@
                     if (event.key === "Enter") generateAITopic();
                 });
             }
+            // 固定題庫先立即可玩；共享題庫在背景載入，成功後自動補上卡片。
+            loadSharedTopicDatabases({ silent: true });
         }
 
         // 不等待字型、圖示、CDN 等外部資源；DOM 一完成就先載入固定題庫。
@@ -849,7 +945,6 @@
             grid.innerHTML = "";
             const allDatabases = getAllTopicDatabases();
 
-            // "All Topics" Card
             const allBtn = document.createElement("div");
             allBtn.className = `p-4 rounded-xl border cursor-pointer transition flex flex-col justify-between ${selectedTopicKey === 'ALL' ? 'bg-indigo-600/30 border-indigo-500 glow-blue' : 'bg-slate-800/60 border-slate-700/80 hover:bg-slate-800'}`;
             allBtn.onclick = () => selectTopic('ALL');
@@ -858,7 +953,7 @@
                     <span>全部綜合題目</span>
                     <i class="fa-solid fa-shapes text-indigo-400"></i>
                 </div>
-                <div class="text-xs text-slate-400 mt-2">包含所有內建與已儲存 AI 題庫</div>
+                <div class="text-xs text-slate-400 mt-2">內建題庫＋共享 AI 題庫＋本機備援</div>
             `;
             grid.appendChild(allBtn);
 
@@ -879,6 +974,35 @@
                 grid.appendChild(card);
             });
 
+            Object.keys(SHARED_TOPIC_DATABASES).forEach(key => {
+                const count = SHARED_TOPIC_DATABASES[key].length;
+                totalCount += count;
+                const card = document.createElement("div");
+                const isSelected = selectedTopicKey === key;
+                card.className = `p-4 rounded-xl border cursor-pointer transition flex flex-col justify-between ${isSelected ? 'bg-cyan-600/25 border-cyan-400 glow-blue' : 'bg-cyan-950/20 border-cyan-500/30 hover:bg-cyan-950/35'}`;
+                card.onclick = () => selectTopic(key);
+
+                const header = document.createElement("div");
+                header.className = "font-bold text-sm text-white flex items-start justify-between gap-2";
+                const label = document.createElement("span");
+                label.className = "leading-tight";
+                label.innerHTML = `<i class="fa-solid fa-cloud text-cyan-300 mr-1"></i>${escapeHTML(displayTopicName(key))}`;
+                const deleteBtn = document.createElement("button");
+                deleteBtn.type = "button";
+                deleteBtn.className = "shrink-0 text-slate-500 hover:text-rose-400";
+                deleteBtn.title = "從共享雲端刪除此題庫";
+                deleteBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+                deleteBtn.addEventListener("click", (event) => removeSharedTopic(key, event));
+                const meta = document.createElement("div");
+                meta.className = "text-xs text-cyan-300/80 mt-2";
+                meta.textContent = `共享 AI 題庫 · ${count} 題`;
+                header.appendChild(label);
+                header.appendChild(deleteBtn);
+                card.appendChild(header);
+                card.appendChild(meta);
+                grid.appendChild(card);
+            });
+
             Object.keys(CUSTOM_TOPIC_DATABASES).forEach(key => {
                 const count = CUSTOM_TOPIC_DATABASES[key].length;
                 totalCount += count;
@@ -886,25 +1010,20 @@
                 const isSelected = (selectedTopicKey === key);
                 card.className = `p-4 rounded-xl border cursor-pointer transition flex flex-col justify-between ${isSelected ? 'bg-fuchsia-600/25 border-fuchsia-400 glow-blue' : 'bg-fuchsia-950/20 border-fuchsia-500/30 hover:bg-fuchsia-950/35'}`;
                 card.onclick = () => selectTopic(key);
-
                 const header = document.createElement("div");
                 header.className = "font-bold text-sm text-white flex items-start justify-between gap-2";
-
                 const label = document.createElement("span");
                 label.className = "leading-tight";
-                label.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-fuchsia-300 mr-1"></i>${escapeHTML(displayTopicName(key))}`;
-
+                label.innerHTML = `<i class="fa-solid fa-hard-drive text-fuchsia-300 mr-1"></i>${escapeHTML(displayTopicName(key))}`;
                 const deleteBtn = document.createElement("button");
                 deleteBtn.type = "button";
                 deleteBtn.className = "shrink-0 text-slate-500 hover:text-rose-400";
-                deleteBtn.title = "刪除此 AI 題庫";
+                deleteBtn.title = "刪除此本機備援題庫";
                 deleteBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
                 deleteBtn.addEventListener("click", (event) => removeCustomTopic(key, event));
-
                 const meta = document.createElement("div");
                 meta.className = "text-xs text-fuchsia-300/80 mt-2";
-                meta.textContent = `AI 即時題庫 · ${count} 題`;
-
+                meta.textContent = `本機備援 AI 題庫 · ${count} 題`;
                 header.appendChild(label);
                 header.appendChild(deleteBtn);
                 card.appendChild(header);
@@ -913,7 +1032,11 @@
             });
 
             const selectedDb = allDatabases[selectedTopicKey] || [];
-            document.getElementById("selectedTopicTitle").innerText = (selectedTopicKey === 'ALL') ? '全部綜合' : (isCustomTopicKey(selectedTopicKey) ? `AI｜${displayTopicName(selectedTopicKey)}` : selectedTopicKey);
+            let selectedLabel = selectedTopicKey;
+            if (selectedTopicKey === 'ALL') selectedLabel = '全部綜合';
+            else if (isSharedTopicKey(selectedTopicKey)) selectedLabel = `共享｜${displayTopicName(selectedTopicKey)}`;
+            else if (isCustomTopicKey(selectedTopicKey)) selectedLabel = `AI｜${displayTopicName(selectedTopicKey)}`;
+            document.getElementById("selectedTopicTitle").innerText = selectedLabel;
             document.getElementById("selectedTopicCount").innerText = (selectedTopicKey === 'ALL') ? totalCount : selectedDb.length;
         }
 
@@ -1012,20 +1135,55 @@
                     throw new Error("AI 沒有回傳可用題目，請換一個主題或改用智慧延伸模式。");
                 }
 
-                const customKey = `AI｜${payload.topic || topic}`;
-                CUSTOM_TOPIC_DATABASES[customKey] = payload.questions.map(q => ({
+                const normalizedQuestions = payload.questions.map(q => ({
                     zhuyin: q.zhuyin,
-                    answers: q.answers.map(a => ({
-                        word: a.word,
-                        clue: a.clue
-                    })),
+                    answers: q.answers.map(a => ({ word: a.word, clue: a.clue })),
                     __ai: true
                 }));
-                persistCustomTopicDatabases();
-                selectedTopicKey = customKey;
+
+                const topicName = payload.topic || topic;
+                let savedToCloud = false;
+                let cloudMessage = "";
+                let selectedKey = localTopicKey(topicName);
+
+                // AI 題目先完成，再獨立嘗試同步共享雲端；就算 Blob 尚未設定，題目也不會因此遺失。
+                try {
+                    const shareResponse = await fetch("/api/shared-topics", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            action: "save",
+                            topic: topicName,
+                            difficulty: payload.difficulty,
+                            mode: payload.mode,
+                            questions: normalizedQuestions,
+                            accessCode
+                        })
+                    });
+                    const sharePayload = await shareResponse.json().catch(() => ({}));
+                    if (!shareResponse.ok) throw new Error(sharePayload.error || `共享同步失敗（HTTP ${shareResponse.status}）`);
+
+                    const sharedItem = sharePayload.topic || {};
+                    selectedKey = sharedTopicKey(sharedItem.topic || topicName);
+                    SHARED_TOPIC_DATABASES[selectedKey] = normalizedQuestions.map(q => ({ ...q, __shared: true }));
+                    SHARED_TOPIC_METADATA[selectedKey] = sharedItem;
+                    delete CUSTOM_TOPIC_DATABASES[localTopicKey(topicName)];
+                    persistCustomTopicDatabases();
+                    savedToCloud = true;
+                    cloudMessage = "已同步到共享雲端，其他裝置重新整理或按「更新共享題庫」即可使用。";
+                } catch (cloudError) {
+                    console.warn("共享同步失敗，改存本機備援：", cloudError);
+                    selectedKey = localTopicKey(topicName);
+                    CUSTOM_TOPIC_DATABASES[selectedKey] = normalizedQuestions;
+                    persistCustomTopicDatabases();
+                    cloudMessage = `共享雲端暫時無法儲存，已改存這台瀏覽器備援。${cloudError?.message ? `（${cloudError.message}）` : ""}`;
+                }
+
+                selectedTopicKey = selectedKey;
                 renderTopicsGrid();
                 stopAIProgressAnimation();
-                setAIGenerationStatus(`完成！已建立 ${payload.questions.length} 題並通過程式檢核。`, 100, true);
+                const fillCount = Math.max(0, requestedCount - payload.questions.length);
+                setAIGenerationStatus(`完成！AI 已建立 ${payload.questions.length} 題${fillCount ? `；開始遊戲時會再從固定題庫補 ${fillCount} 題` : ""}。`, 100, true);
 
                 const modeLabel = payload.mode === "strict" ? "嚴格主題" : "智慧延伸";
                 const difficultyLabel = ({ easy: "簡單", standard: "標準", challenge: "挑戰" })[payload.difficulty] || payload.difficulty;
@@ -1034,14 +1192,15 @@
                     <div class="flex items-start gap-2">
                         <i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i>
                         <div class="min-w-0">
-                            <div class="font-black text-emerald-300">AI 題庫「${escapeHTML(payload.topic || topic)}」建立完成</div>
-                            <div class="text-slate-300 mt-1">${payload.questions.length} 題 · ${escapeHTML(difficultyLabel)} · ${escapeHTML(modeLabel)}${sourceCount ? ` · 參考 ${sourceCount} 個網路來源` : ""}</div>
-                            <div class="text-slate-500 mt-1">已自動儲存在這台瀏覽器，並設為目前競賽主題。直接按左側「開始正式競賽」即可。</div>
+                            <div class="font-black text-emerald-300">AI 題庫「${escapeHTML(topicName)}」建立完成</div>
+                            <div class="text-slate-300 mt-1">AI 核心 ${payload.questions.length} 題 · ${escapeHTML(difficultyLabel)} · ${escapeHTML(modeLabel)}${sourceCount ? ` · 參考 ${sourceCount} 個網路來源` : ""}</div>
+                            <div class="text-slate-400 mt-1">${fillCount ? `本場若設定 ${requestedCount} 題，會另外從 119 題內建題庫隨機補 ${fillCount} 題，補完後再全部混合亂序。` : `目前 AI 題數已足以滿足本場 ${requestedCount} 題設定。`}</div>
+                            <div class="${savedToCloud ? 'text-cyan-300' : 'text-amber-300'} mt-1">${escapeHTML(cloudMessage)}</div>
                         </div>
                     </div>
                 `;
                 resultBox.classList.remove("hidden");
-                showToast("AI 題庫完成", `已建立 ${payload.questions.length} 題「${escapeHTML(payload.topic || topic)}」，可以立即開始！`);
+                showToast(savedToCloud ? "AI 題庫已共享" : "AI 題庫完成", `AI 核心 ${payload.questions.length} 題${fillCount ? `＋固定題庫補 ${fillCount} 題` : ""}，可以開始！`);
                 playBeep(1100, 0.1, 'triangle');
             } catch (error) {
                 stopAIProgressAnimation();
@@ -1099,7 +1258,8 @@
 
             const allDatabases = getAllTopicDatabases();
             let selectedTopicPool = [];
-            let otherTopicPool = [];
+            let fixedFallbackPool = [];
+
             if (selectedTopicKey === 'ALL') {
                 Object.entries(allDatabases).forEach(([key, list]) => {
                     selectedTopicPool = selectedTopicPool.concat(list.map(q => ({ ...q, __category: key })));
@@ -1107,15 +1267,12 @@
             } else {
                 selectedTopicPool = (allDatabases[selectedTopicKey] || []).map(q => ({ ...q, __category: selectedTopicKey }));
 
-                // 內建主題維持 v2 行為：題數不足時才從其他分類補題。
-                // AI 題庫則不跨題庫補題，避免自訂主題被其他類別稀釋。
-                if (!isCustomTopicKey(selectedTopicKey)) {
-                    Object.keys(allDatabases).forEach(key => {
-                        if (key !== selectedTopicKey) {
-                            otherTopicPool = otherTopicPool.concat(allDatabases[key].map(q => ({ ...q, __category: key })));
-                        }
-                    });
-                }
+                // 補題來源一律只用 119 題「內建固定題庫」，避免 AI 題庫互相污染主題。
+                Object.entries(PRESET_TOPIC_DATABASES).forEach(([key, list]) => {
+                    // 若目前選的是內建主題，就不要從同一分類重複加入；AI 主題則可使用全部內建分類補題。
+                    if (!isAITopicKey(selectedTopicKey) && key === selectedTopicKey) return;
+                    fixedFallbackPool = fixedFallbackPool.concat(list.map(q => ({ ...q, __category: key, __fallback: true })));
+                });
             }
 
             if (selectedTopicPool.length === 0) {
@@ -1123,27 +1280,33 @@
                 return;
             }
 
-            if (isCustomTopicKey(selectedTopicKey) && selectedTopicPool.length < totalQuestionsCount) {
-                activeQuestionsPool = selectedTopicPool;
-                totalQuestionsCount = selectedTopicPool.length;
-                showToast("AI 題庫題數調整", `這個 AI 題庫目前有 ${selectedTopicPool.length} 題，本場將以全部題目進行，不混入其他主題。`);
-            } else if (selectedTopicKey !== 'ALL' && selectedTopicPool.length < totalQuestionsCount) {
-                shuffleArray(otherTopicPool);
+            if (selectedTopicKey !== 'ALL' && selectedTopicPool.length < totalQuestionsCount) {
+                shuffleArray(fixedFallbackPool);
                 const neededCount = totalQuestionsCount - selectedTopicPool.length;
-                const extraQuestions = otherTopicPool.slice(0, neededCount);
+                const extraQuestions = fixedFallbackPool.slice(0, neededCount);
                 activeQuestionsPool = selectedTopicPool.concat(extraQuestions);
-                showToast("題庫自動補充", `『${escapeHTML(selectedTopicKey)}』原有 ${selectedTopicPool.length} 題，已跨主題補充 ${extraQuestions.length} 題，並將全部題目重新混合亂序！`);
+
+                if (isAITopicKey(selectedTopicKey)) {
+                    showToast(
+                        "AI 題庫已自動補滿",
+                        `AI 核心 ${selectedTopicPool.length} 題＋內建固定題庫 ${extraQuestions.length} 題；補完後已全部重新混合亂序。`
+                    );
+                } else {
+                    showToast(
+                        "題庫自動補充",
+                        `『${escapeHTML(displayTopicName(selectedTopicKey))}』原有 ${selectedTopicPool.length} 題，已從其他內建分類補充 ${extraQuestions.length} 題並整體亂序。`
+                    );
+                }
             } else {
                 activeQuestionsPool = selectedTopicPool;
             }
 
-            // 補題完成後，才針對整份競賽題池做最後一次亂序。
+            // 無論是否補題，都在最後才針對整份競賽題池做 Fisher-Yates 亂序。
             shuffleArray(activeQuestionsPool);
 
             const maxAvailable = activeQuestionsPool.length;
             totalQuestionsCount = Math.min(totalQuestionsCount, maxAvailable);
 
-            // Update UI Labels
             document.getElementById("displayTeamAName").innerText = teamAName;
             document.getElementById("displayTeamBName").innerText = teamBName;
             document.getElementById("displayScoreA").innerText = scoreA;
@@ -1163,7 +1326,7 @@
             document.getElementById("currentQNum").innerText = currentQuestionIndex + 1;
             const qData = activeQuestionsPool[currentQuestionIndex];
             const rawCategory = qData.__category || (selectedTopicKey === 'ALL' ? '綜合題型' : selectedTopicKey);
-            document.getElementById("currentCategoryBadge").innerText = isCustomTopicKey(rawCategory) ? `AI｜${displayTopicName(rawCategory)}` : rawCategory;
+            document.getElementById("currentCategoryBadge").innerText = isSharedTopicKey(rawCategory) ? `共享｜${displayTopicName(rawCategory)}` : (isCustomTopicKey(rawCategory) ? `AI｜${displayTopicName(rawCategory)}` : rawCategory);
             
             // Render Zhuyin Big Display Cards
             const container = document.getElementById("zhuyinContainer");
