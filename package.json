@@ -1,0 +1,16 @@
+{
+  "name": "zhuyin-rush-ai-v3",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "openai": "7.5.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "vercel": "59.1.4"
+  }
+}

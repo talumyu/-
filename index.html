@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注音急轉彎 - 團康競賽主控系統</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti for Victory Screen -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans TC', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f5ff',
+                            100: '#e0ebff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'bounce-short': 'bounce 0.5s infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Sans TC', 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            user-select: none;
+        }
+        .zhuyin-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95));
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+        }
+        .glow-blue {
+            box-shadow: 0 0 35px rgba(59, 130, 246, 0.4);
+        }
+        .glow-red {
+            box-shadow: 0 0 35px rgba(239, 68, 68, 0.4);
+        }
+        .glow-amber {
+            box-shadow: 0 0 35px rgba(245, 158, 11, 0.4);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col justify-between overflow-x-hidden antialiased bg-slate-950 text-slate-100" onclick="unlockAudioOnFirstTouch()">
+    <!-- Navbar Header -->
+    <header class="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-4 py-3 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="switchPage('pageSetup')">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-blue-500 to-amber-400 flex items-center justify-center font-black text-2xl text-white shadow-lg">
+                    ㄅ
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-wider bg-gradient-to-r from-blue-400 via-indigo-300 to-amber-300 bg-clip-text text-transparent">
+                        注音急轉彎 <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">全題庫競賽版</span>
+                    </h1>
+                    <p class="text-xs text-slate-400 hidden sm:block">主持人派對活動與搶答主控台</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2 sm:space-x-4">
+                <button onclick="toggleFullscreen(event)" class="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-xl transition duration-200 text-sm" title="全螢幕 / 離開全螢幕">
+                    <i class="fa-solid fa-expand text-amber-400"></i>
+                    <span class="hidden sm:inline text-xs sm:text-sm font-semibold">全螢幕</span>
+                </button>
+                <!-- Audio BGM Toggle Button -->
+                <button id="btnBgmToggle" onclick="toggleBgm(event)" class="flex items-center space-x-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-xl transition duration-200 text-sm">
+                    <i id="bgmIcon" class="fa-solid fa-music text-indigo-400"></i>
+                    <span id="bgmText" class="text-xs sm:text-sm font-semibold">常駐音樂 ON</span>
+                    <div id="eqBars" class="flex items-end space-x-0.5 h-3 ml-1">
+                        <div class="w-1 bg-indigo-400 animate-bounce h-full"></div>
+                        <div class="w-1 bg-indigo-400 animate-bounce h-2/3" style="animation-delay: 0.15s"></div>
+                        <div class="w-1 bg-indigo-400 animate-bounce h-4/5" style="animation-delay: 0.3s"></div>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col justify-center">
+        <!-- ==================== PAGE 1: SETUP PAGE ==================== -->
+        <div id="pageSetup" class="space-y-6">
+            <!-- Header Banner -->
+            <div class="bg-gradient-to-r from-indigo-900/60 via-slate-900 to-purple-900/60 border border-indigo-500/30 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+                <div class="relative z-10">
+                    <h2 class="text-2xl sm:text-3xl font-black text-white mb-2 flex items-center">
+                        <i class="fa-solid fa-gamepad text-amber-400 mr-3"></i>團康競賽準備區
+                    </h2>
+                    <p class="text-slate-300 text-sm max-w-2xl">
+                        可使用內建題庫，也可輸入任何主題，由 AI 即時搜尋、驗證並建立符合「注音急轉彎」規則的新題庫。固定題庫即使 AI 連線失敗仍可正常使用！
+                    </p>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left: Settings Control -->
+                <div class="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5 shadow-xl">
+                    <h3 class="text-lg font-bold text-slate-200 border-b border-slate-800 pb-3 flex items-center">
+                        <i class="fa-solid fa-sliders text-indigo-400 mr-2"></i>競賽參數設定
+                    </h3>
+                    <!-- Team Names Input -->
+                    <div class="space-y-3">
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider">隊伍名稱設置</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <span class="text-xs text-rose-400 font-semibold mb-1 block"><i class="fa-solid fa-flag mr-1"></i>A隊 (紅)</span>
+                                <input id="inputTeamA" type="text" value="紅隊" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500 font-bold">
+                            </div>
+                            <div>
+                                <span class="text-xs text-blue-400 font-semibold mb-1 block"><i class="fa-solid fa-flag mr-1"></i>B隊 (藍)</span>
+                                <input id="inputTeamB" type="text" value="藍隊" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 font-bold">
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Timer Duration Setting -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider">每題答題時間 (秒)</label>
+                        <div class="grid grid-cols-5 gap-2">
+                            <button onclick="setTimerSec(5)" class="btn-timer-sec bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs border border-slate-700 transition">5s</button>
+                            <button onclick="setTimerSec(10)" class="btn-timer-sec bg-indigo-600 text-white font-bold py-2 rounded-xl text-xs border border-indigo-500 transition">10s</button>
+                            <button onclick="setTimerSec(15)" class="btn-timer-sec bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs border border-slate-700 transition">15s</button>
+                            <button onclick="setTimerSec(20)" class="btn-timer-sec bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs border border-slate-700 transition">20s</button>
+                            <button onclick="setTimerSec(30)" class="btn-timer-sec bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs border border-slate-700 transition">30s</button>
+                        </div>
+                    </div>
+                    <!-- Question Count Setting -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider">題目數量 (題)</label>
+                        <select id="selectQuestionCount" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-bold">
+                            <option value="5">5 題 (快速賽)</option>
+                            <option value="10" selected>10 題 (標準賽)</option>
+                            <option value="15">15 題 (熱鬥賽)</option>
+                            <option value="20">20 題 (馬拉松賽)</option>
+                            <option value="999">全部題目 (無限挑戰)</option>
+                        </select>
+                    </div>
+                    <!-- Start Game Action -->
+                    <button onclick="startGame()" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black py-4 rounded-xl text-lg shadow-lg hover:shadow-emerald-500/20 transition transform active:scale-95 flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-play text-xl"></i>
+                        <span>開始正式競賽</span>
+                    </button>
+                </div>
+                <!-- Right: Topic Categories Selector -->
+                <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                            <h3 class="text-lg font-bold text-slate-200 flex items-center">
+                                <i class="fa-solid fa-list-check text-indigo-400 mr-2"></i>選擇競賽主題
+                            </h3>
+                        </div>
+                        <!-- Topics Cards Grid -->
+                        <div id="topicsGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-72 overflow-y-auto pr-2">
+                            <!-- Populated dynamically via JS -->
+                        </div>
+
+                        <!-- AI Dynamic Topic Generator -->
+                        <div class="mt-5 pt-5 border-t border-slate-800">
+                            <div class="rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-950/30 via-slate-950/60 to-indigo-950/30 p-4 space-y-4">
+                                <div class="flex items-start justify-between gap-3">
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30">
+                                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                            </span>
+                                            <h4 class="font-black text-white">AI 動態出題</h4>
+                                        </div>
+                                        <p class="text-xs text-slate-400 mt-2">輸入主題後，系統會即時搜尋相關詞彙、檢查注音規則，再建立臨時題庫。</p>
+                                    </div>
+                                    <span class="text-[10px] font-black tracking-wider text-fuchsia-300 bg-fuchsia-500/10 border border-fuchsia-500/20 px-2 py-1 rounded-full">ONLINE</span>
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                                    <div class="sm:col-span-6">
+                                        <label class="block text-[11px] font-bold text-slate-400 mb-1">自訂主題</label>
+                                        <input id="aiTopicInput" type="text" maxlength="40" placeholder="例如：棒球、布農族文化、聖經人物" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-fuchsia-500">
+                                    </div>
+                                    <div class="sm:col-span-3">
+                                        <label class="block text-[11px] font-bold text-slate-400 mb-1">難度</label>
+                                        <select id="aiDifficulty" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-fuchsia-500 font-bold">
+                                            <option value="easy">🟢 簡單</option>
+                                            <option value="standard" selected>🟡 標準</option>
+                                            <option value="challenge">🔴 挑戰</option>
+                                        </select>
+                                    </div>
+                                    <div class="sm:col-span-3">
+                                        <label class="block text-[11px] font-bold text-slate-400 mb-1">主題範圍</label>
+                                        <select id="aiMode" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-fuchsia-500 font-bold">
+                                            <option value="smart" selected>✨ 智慧延伸</option>
+                                            <option value="strict">🎯 嚴格主題</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <details class="group">
+                                    <summary class="cursor-pointer text-[11px] text-slate-500 hover:text-slate-300 select-none">進階：若部署端設定了連線密碼，請在這裡輸入</summary>
+                                    <div class="mt-2">
+                                        <input id="aiAccessCode" type="password" autocomplete="off" placeholder="選填：APP_ACCESS_CODE" class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-fuchsia-500">
+                                    </div>
+                                </details>
+
+                                <button id="btnGenerateAI" onclick="generateAITopic()" class="w-full bg-gradient-to-r from-fuchsia-600 to-indigo-600 hover:from-fuchsia-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black py-3 rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+                                    <i id="aiGenerateIcon" class="fa-solid fa-wand-magic-sparkles"></i>
+                                    <span id="aiGenerateText">搜尋並建立題庫</span>
+                                </button>
+
+                                <div id="aiGenerationStatus" class="hidden rounded-xl border border-slate-700 bg-slate-950/70 p-3">
+                                    <div class="flex items-center gap-2 text-xs font-bold text-slate-300">
+                                        <span id="aiStatusSpinner" class="inline-flex w-4 h-4 border-2 border-fuchsia-400/30 border-t-fuchsia-400 rounded-full animate-spin"></span>
+                                        <span id="aiStatusText">準備建立題庫…</span>
+                                    </div>
+                                    <div class="mt-2 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                        <div id="aiStatusBar" class="h-full bg-gradient-to-r from-fuchsia-500 to-indigo-500 transition-all duration-500" style="width: 8%"></div>
+                                    </div>
+                                </div>
+
+                                <div id="aiGenerationResult" class="hidden rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-3 text-xs"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Topic Info Summary Footer -->
+                    <div class="bg-slate-950/60 rounded-xl p-3 border border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                        <span>目前選取主題：<strong id="selectedTopicTitle" class="text-amber-400 font-bold">全部綜合</strong></span>
+                        <span>題庫現有題數：<strong id="selectedTopicCount" class="text-indigo-400 font-bold">0</strong> 題</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== PAGE 2: QUESTION COMPETITION ARENA ==================== -->
+        <div id="pageQuestion" class="hidden space-y-6">
+            <!-- Top Status Bar: Scores & Progress -->
+            <div class="grid grid-cols-12 gap-4 items-center">
+                <!-- Team A Score Board -->
+                <div class="col-span-4 sm:col-span-3 bg-gradient-to-br from-rose-950/80 to-slate-900 border-2 border-rose-500/40 rounded-2xl p-3 sm:p-4 text-center shadow-lg relative overflow-hidden glow-red">
+                    <span id="displayTeamAName" class="text-xs sm:text-sm font-black text-rose-300 truncate block">紅隊</span>
+                    <div id="displayScoreA" class="text-3xl sm:text-5xl font-black text-rose-400 my-1">0</div>
+                    <div class="flex justify-center space-x-1 sm:space-x-2 mt-2">
+                        <button onclick="addScore('A', 1)" class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-2 sm:px-3 py-1 rounded-lg shadow">+1</button>
+                        <button onclick="addScore('A', -1)" class="bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-bold px-2 py-1 rounded-lg border border-slate-700">-1</button>
+                    </div>
+                </div>
+                <!-- Center Question Progress & Timer Circle -->
+                <div class="col-span-4 sm:col-span-6 flex flex-col items-center justify-center space-y-2">
+                    <div class="bg-slate-900 border border-slate-800 rounded-full px-4 py-1 text-xs font-bold text-slate-400 flex items-center space-x-2">
+                        <span>第 <span id="currentQNum" class="text-amber-400 font-black text-sm">1</span> / <span id="totalQNum">10</span> 題</span>
+                        <span class="text-slate-600">|</span>
+                        <span id="currentCategoryBadge" class="text-indigo-400">主題名稱</span>
+                    </div>
+                    <!-- Circular Digital Timer Visualizer -->
+                    <div class="relative w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center">
+                        <svg class="w-full h-full transform -rotate-90">
+                            <circle cx="50%" cy="50%" r="40%" class="stroke-slate-800 fill-none" stroke-width="8"></circle>
+                            <circle id="timerProgressCircle" cx="50%" cy="50%" r="40%" class="stroke-indigo-500 fill-none transition-all duration-300" stroke-width="8" stroke-dasharray="250" stroke-dashoffset="0" stroke-linecap="round"></circle>
+                        </svg>
+                        <div class="absolute flex flex-col items-center">
+                            <span id="timerText" class="text-3xl sm:text-4xl font-black tracking-tighter text-white">10</span>
+                            <span class="text-[10px] text-slate-400 font-bold uppercase">SECS</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Team B Score Board -->
+                <div class="col-span-4 sm:col-span-3 bg-gradient-to-br from-blue-950/80 to-slate-900 border-2 border-blue-500/40 rounded-2xl p-3 sm:p-4 text-center shadow-lg relative overflow-hidden glow-blue">
+                    <span id="displayTeamBName" class="text-xs sm:text-sm font-black text-blue-300 truncate block">藍隊</span>
+                    <div id="displayScoreB" class="text-3xl sm:text-5xl font-black text-blue-400 my-1">0</div>
+                    <div class="flex justify-center space-x-1 sm:space-x-2 mt-2">
+                        <button onclick="addScore('B', 1)" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-2 sm:px-3 py-1 rounded-lg shadow">+1</button>
+                        <button onclick="addScore('B', -1)" class="bg-slate-800 hover:bg-slate-700 text-blue-300 text-xs font-bold px-2 py-1 rounded-lg border border-slate-700">-1</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Presentation Screen: Giant Zhuyin Card -->
+            <div id="mainQuestionCard" class="zhuyin-card rounded-3xl p-8 sm:p-12 text-center relative overflow-hidden min-h-[320px] flex flex-col items-center justify-center space-y-6">
+                <!-- Visual Background Glow Accent -->
+                <div class="absolute -top-24 -left-24 w-60 h-60 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="absolute -bottom-24 -right-24 w-60 h-60 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <!-- Big Zhuyin Display Grid -->
+                <div id="zhuyinContainer" class="flex flex-wrap items-center justify-center gap-4 sm:gap-8">
+                    <!-- Example Zhuyin Prompts populated dynamically -->
+                </div>
+                <!-- Answer Reveal Box (Hidden by default) -->
+                <div id="answerBox" class="hidden transition-all duration-300 bg-slate-950/80 border border-slate-800 rounded-2xl p-4 sm:p-6 w-full max-w-2xl space-y-3">
+                    <div class="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-800 pb-2">
+                        <i class="fa-solid fa-lightbulb text-amber-400 mr-1.5"></i>參考解答與注音對照
+                    </div>
+                    <div id="answerWordsList" class="flex flex-wrap gap-2 justify-center">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+                <!-- Hint Box (Hidden by default) -->
+                <div id="hintBox" class="hidden transition-all duration-300 bg-amber-950/60 border border-amber-500/40 text-amber-200 rounded-2xl p-4 w-full max-w-2xl text-center space-y-1 shadow-lg">
+                    <div class="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-wand-magic-sparkles text-amber-300 mr-1"></i>
+                        <span>主持提示 (不直接公開答案)</span>
+                    </div>
+                    <div id="hintText" class="text-base sm:text-lg font-black text-amber-100 mt-1"></div>
+                </div>
+            </div>
+
+            <!-- Host Toolbar & Quick Action Controls -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-wrap items-center justify-between gap-3">
+                <!-- Left: Timer Controls -->
+                <div class="flex items-center space-x-2">
+                    <button id="btnPauseTimer" onclick="togglePauseTimer()" class="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 px-4 py-2 rounded-xl text-sm font-bold transition flex items-center">
+                        <i id="pauseIcon" class="fa-solid fa-pause mr-2"></i>
+                        <span id="pauseText">暫停</span>
+                    </button>
+                    <button onclick="resetTimer()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl text-sm font-bold transition" title="重置時間">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                    <button onclick="addExtraTime(5)" class="bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 px-3 py-2 rounded-xl text-sm font-bold transition">
+                        +5秒
+                    </button>
+                </div>
+                <!-- Center: Answer Reveal & Hint Toggles -->
+                <div class="flex items-center space-x-2">
+                    <button id="btnHint" onclick="showHint()" class="bg-amber-600/80 hover:bg-amber-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition flex items-center">
+                        <i class="fa-solid fa-lightbulb mr-1.5"></i>提示 (快捷鍵 H)
+                    </button>
+                    <button id="btnToggleAnswer" onclick="toggleAnswerVisibility()" class="bg-indigo-600/80 hover:bg-indigo-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-md transition flex items-center">
+                        <i class="fa-solid fa-eye mr-2"></i>顯示解答 (快捷鍵 A)
+                    </button>
+                </div>
+                <!-- Right: SFX & Next Question Controls -->
+                <div class="flex items-center space-x-2">
+                    <button onclick="playBuzzer()" class="bg-rose-600/80 hover:bg-rose-600 text-white px-3 py-2 rounded-xl text-sm font-bold transition" title="搶答響鈴">
+                        <i class="fa-solid fa-bell mr-1"></i>響鈴
+                    </button>
+                    <button onclick="playCorrectSfx()" class="bg-emerald-600/80 hover:bg-emerald-600 text-white px-3 py-2 rounded-xl text-sm font-bold transition" title="答對音效">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </button>
+                    <button id="btnPrevQuestion" onclick="previousQuestion()" disabled class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold px-4 py-2 rounded-xl text-sm shadow-md transition flex items-center disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-slate-800" title="回到上一題">
+                        <i class="fa-solid fa-arrow-left mr-2"></i>
+                        <span>上一題</span>
+                    </button>
+                    <button onclick="nextQuestion()" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-black px-6 py-2 rounded-xl text-sm shadow-lg transition flex items-center">
+                        <span>下一題</span>
+                        <i class="fa-solid fa-arrow-right ml-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== PAGE 3: VICTORY / SUMMARY PAGE ==================== -->
+        <div id="pageVictory" class="hidden text-center space-y-8 py-8">
+            <div class="relative inline-block">
+                <div class="w-24 h-24 sm:w-32 sm:h-32 bg-gradient-to-tr from-amber-400 to-yellow-300 rounded-full flex items-center justify-center text-slate-950 text-5xl sm:text-6xl mx-auto shadow-2xl animate-bounce-short">
+                    <i class="fa-solid fa-trophy"></i>
+                </div>
+            </div>
+            <div class="space-y-2">
+                <h2 id="winnerTitleText" class="text-3xl sm:text-5xl font-black text-amber-300 tracking-wider">
+                    比賽結果頒獎！
+                </h2>
+                <p id="winnerSubText" class="text-slate-400 text-base sm:text-lg">
+                    經過激烈的比賽，最終比分如下：
+                </p>
+            </div>
+            <!-- Score Breakdown Card -->
+            <div class="max-w-xl mx-auto bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+                <div class="grid grid-cols-2 gap-4 divide-x divide-slate-800">
+                    <div class="space-y-2 p-2">
+                        <span id="summaryTeamAName" class="text-lg font-bold text-rose-400">紅隊</span>
+                        <div id="summaryScoreA" class="text-5xl font-black text-white">0</div>
+                    </div>
+                    <div class="space-y-2 p-2">
+                        <span id="summaryTeamBName" class="text-lg font-bold text-blue-400">藍隊</span>
+                        <div id="summaryScoreB" class="text-5xl font-black text-white">0</div>
+                    </div>
+                </div>
+                <div class="pt-4 border-t border-slate-800 flex flex-col sm:flex-row gap-3 justify-center">
+                    <button onclick="startGame()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-3 rounded-2xl shadow-lg transition">
+                        <i class="fa-solid fa-rotate-right mr-2"></i>重新一局
+                    </button>
+                    <button onclick="switchPage('pageSetup')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold px-6 py-3 rounded-2xl transition">
+                        <i class="fa-solid fa-sliders mr-2"></i>返回選擇主題
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+    <!-- Toast Notification Overlay -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+
+    <script>
+        // Global Game States
+        let timerInterval = null;
+        let selectedTimerDuration = 10;
+        let remainingSeconds = 10;
+        let isTimerPaused = false;
+        let scoreA = 0;
+        let scoreB = 0;
+        let teamAName = "紅隊";
+        let teamBName = "藍隊";
+        let totalQuestionsCount = 10;
+        let currentQuestionIndex = 0;
+        let activeQuestionsPool = [];
+        let questionViewStates = [];
+        let selectedTopicKey = "ALL";
+        let currentHintStep = 0;
+
+        // AI 動態題庫：只存在瀏覽器本機，不會改動內建題庫。
+        const CUSTOM_TOPIC_STORAGE_KEY = "zhuyinRushCustomTopicsV3";
+        let CUSTOM_TOPIC_DATABASES = {};
+        let aiGenerationProgressTimer = null;
+        
+        // Web Audio API Synth Engine
+        let audioCtx = null;
+        let isBgmOn = true;
+        let bgmLoopTimer = null;
+        let bgmStep = 0;
+        let isAudioUnlocked = false;
+        
+        function getAudioContext() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContextClass();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+        function unlockAudioOnFirstTouch() {
+            if (isAudioUnlocked) return;
+            try {
+                const ctx = getAudioContext();
+                if (ctx.state === 'running') {
+                    isAudioUnlocked = true;
+                    if (isBgmOn && !bgmLoopTimer) {
+                        startContinuousBgmEngine();
+                    }
+                }
+            } catch (e) {}
+        }
+        function startContinuousBgmEngine() {
+            if (bgmLoopTimer) clearInterval(bgmLoopTimer);
+            const baseNotes = [110.00, 130.81, 164.81, 196.00, 220.00, 261.63, 329.63]; 
+            
+            bgmLoopTimer = setInterval(() => {
+                if (!isBgmOn) return;
+                try {
+                    const ctx = getAudioContext();
+                    if (ctx.state !== 'running') return;
+                    const bassOsc = ctx.createOscillator();
+                    const bassGain = ctx.createGain();
+                    const filter = ctx.createBiquadFilter();
+                    bassOsc.type = 'sawtooth';
+                    const isUrgent = (remainingSeconds <= 3 && document.getElementById("pageQuestion").classList.contains("hidden") === false);
+                    const rootFreq = isUrgent ? 164.81 : 110.00; 
+                    bassOsc.frequency.setValueAtTime(rootFreq, ctx.currentTime);
+                    filter.type = 'lowpass';
+                    filter.frequency.setValueAtTime(isUrgent ? 600 : 350, ctx.currentTime);
+                    bassGain.gain.setValueAtTime(0.06, ctx.currentTime);
+                    bassGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+                    bassOsc.connect(filter);
+                    filter.connect(bassGain);
+                    bassGain.connect(ctx.destination);
+                    bassOsc.start(ctx.currentTime);
+                    bassOsc.stop(ctx.currentTime + 0.35);
+                    const arpFreq = baseNotes[bgmStep % baseNotes.length];
+                    const arpOsc = ctx.createOscillator();
+                    const arpGain = ctx.createGain();
+                    arpOsc.type = 'sine';
+                    arpOsc.frequency.setValueAtTime(arpFreq * (isUrgent ? 1.5 : 1.0), ctx.currentTime);
+                    arpGain.gain.setValueAtTime(0.03, ctx.currentTime);
+                    arpGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+                    arpOsc.connect(arpGain);
+                    arpGain.connect(ctx.destination);
+                    arpOsc.start(ctx.currentTime);
+                    arpOsc.stop(ctx.currentTime + 0.25);
+                    bgmStep++;
+                } catch (e) {}
+            }, 300);
+        }
+        function stopContinuousBgmEngine() {
+            if (bgmLoopTimer) {
+                clearInterval(bgmLoopTimer);
+                bgmLoopTimer = null;
+            }
+        }
+        function toggleBgm(event) {
+            if (event) event.stopPropagation();
+            unlockAudioOnFirstTouch();
+            isBgmOn = !isBgmOn;
+            
+            const btnText = document.getElementById("bgmText");
+            const eqBars = document.getElementById("eqBars");
+            if (isBgmOn) {
+                btnText.innerText = "常駐音樂 ON";
+                eqBars.style.opacity = "1";
+                startContinuousBgmEngine();
+                showToast("背景音樂開啟", "常駐 Ambient 緊張音樂已啟動！");
+            } else {
+                btnText.innerText = "音樂靜音";
+                eqBars.style.opacity = "0.2";
+                stopContinuousBgmEngine();
+                showToast("背景音樂靜音", "背景音樂與音效已暫停。");
+            }
+        }
+
+        function toggleFullscreen(event) {
+            if (event) event.stopPropagation();
+            const root = document.documentElement;
+            try {
+                if (!document.fullscreenElement) {
+                    if (root.requestFullscreen) root.requestFullscreen();
+                    else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
+                } else {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                }
+            } catch (e) {
+                showToast("全螢幕提示", "若瀏覽器阻擋全螢幕，可改用 F11 或瀏覽器的全螢幕功能。");
+            }
+        }
+
+        function playBeep(freq = 800, duration = 0.1, type = 'sine') {
+            if (!isBgmOn) return;
+            try {
+                const ctx = getAudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, ctx.currentTime);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + duration);
+            } catch (e) {}
+        }
+        function playBuzzer() {
+            if (!isBgmOn) return;
+            try {
+                const ctx = getAudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(160, ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(80, ctx.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.35, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.4);
+            } catch (e) {}
+        }
+        function playCorrectSfx() {
+            if (!isBgmOn) return;
+            try {
+                const ctx = getAudioContext();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+                osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.3);
+            } catch (e) {}
+        }
+        function playVictorySound() {
+            if (!isBgmOn) return;
+            try {
+                const ctx = getAudioContext();
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((f, idx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(f, ctx.currentTime + idx * 0.1);
+                    gain.gain.setValueAtTime(0.25, ctx.currentTime + idx * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.1 + 0.3);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(ctx.currentTime + idx * 0.1);
+                    osc.stop(ctx.currentTime + idx * 0.1 + 0.3);
+                });
+            } catch (e) {}
+        }
+
+        // 完整更新題庫資料結構
+        const PRESET_TOPIC_DATABASES = {
+            "學校生活": [
+                { zhuyin: ["ㄕ", "ㄒ"], answers: [{ word: "數學 (ㄕㄨˋ ㄒㄩㄝˊ)", clue: "這是一門需要大量邏輯與數字運算的學科" }, { word: "手寫 (ㄕㄡˇ ㄒㄧㄝˇ)", clue: "不用鍵盤打字，親自拿筆在紙上紀錄" }, { word: "升學 (ㄕㄥ ㄒㄩㄝˊ)", clue: "畢業後考上進入更高階段的學校就讀" }] },
+                { zhuyin: ["ㄒ", "ㄕ"], answers: [{ word: "學生 (ㄒㄩㄝˊ ㄕㄥ)", clue: "在學校裡負責聽課與學習的人" }, { word: "新生 (ㄒㄧㄣ ㄕㄥ)", clue: "剛入學、對校園一切都還不熟悉的菜鳥" }, { word: "先生 (ㄒㄧㄢ ㄕㄥ)", clue: "對男性的尊稱，或是古時候對老師的稱呼" }] },
+                { zhuyin: ["ㄐ", "ㄕ"], answers: [{ word: "教室 (ㄐㄧㄠˋ ㄕˋ)", clue: "大家一起坐在裡面聽課的專屬空間" }, { word: "教師 (ㄐㄧㄠˋ ㄕ)", clue: "在學校裡負責傳授知識的職業統稱" }, { word: "教授 (ㄐㄧㄠˋ ㄕㄡˋ)", clue: "在大學裡面主要做學術研究與授課的人" }] },
+                { zhuyin: ["ㄎ", "ㄅ"], answers: [{ word: "課本 (ㄎㄜˋ ㄅㄣˇ)", clue: "上課時一定要帶的官方教材書籍" }, { word: "看板 (ㄎㄢˋ ㄅㄢˇ)", clue: "走廊或校門口放公告的大型板子" }, { word: "課表 (ㄎㄜˋ ㄅㄧㄠˇ)", clue: "紀錄每天每節要上什麼課的格子表格" }] },
+                { zhuyin: ["ㄊ", "ㄒ"], answers: [{ word: "同學 (ㄊㄨㄥˊ ㄒㄩㄝˊ)", clue: "跟你一起在同一個班級上課的人" }, { word: "聽寫 (ㄊㄧㄥ ㄒㄧㄝˇ)", clue: "老師念出一段文字，讓你用紙筆記錄下來的測驗" }, { word: "退休 (ㄊㄨㄟˋ ㄒㄧㄡ)", clue: "老師年紀到了，決定不再繼續教書離開學校" }] },
+                { zhuyin: ["ㄌ", "ㄕ"], answers: [{ word: "老師 (ㄌㄠˇ ㄕ)", clue: "站在黑板前教導我們知識的人" }, { word: "歷史 (ㄌㄧˋ ㄕˇ)", clue: "學習過去朝代和發生過大事件的科目" }, { word: "律師 (ㄌㄩˋ ㄕ)", clue: "法商學院畢業後考取的法律專業人員" }] },
+                { zhuyin: ["ㄎ", "ㄕ"], answers: [{ word: "考試 (ㄎㄠˇ ㄕˋ)", clue: "期中或期末驗收學習成果的測驗" }, { word: "考生 (ㄎㄠˇ ㄕㄥ)", clue: "正在準備參加大考或聯考的學生" }, { word: "看書 (ㄎㄢˋ ㄕㄨ)", clue: "在圖書館裡最常做的事情" }] },
+                { zhuyin: ["ㄗ", "ㄨ"], answers: [{ word: "座位 (ㄗㄨㄛˋ ㄨㄟˋ)", clue: "教室裡屬於你坐的那張桌椅" }, { word: "作文 (ㄗㄨㄛˋ ㄨㄣˊ)", clue: "國文課要寫一整篇文章的功課" }, { word: "自我 (ㄗˋ ㄨㄛˇ)", clue: "開學第一天要上台介紹的對象" }] },
+                { zhuyin: ["ㄗ", "ㄧ"], answers: [{ word: "作業 (ㄗㄨㄛˋ ㄧㄝˋ)", clue: "放學後老師交代要帶回家寫的功課" }, { word: "自由 (ㄗˋ ㄧㄡˊ)", clue: "下課鐘聲響起時，學生最渴望擁有的感覺" }, { word: "左右 (ㄗㄨㄛˇ ㄧㄡˋ)", clue: "做國民健康操時身體要轉動的方向" }] },
+                { zhuyin: ["ㄈ", "ㄗ"], answers: [{ word: "分組 (ㄈㄣ ㄗㄨˇ)", clue: "做報告時要找幾個同學一起合作的動作" }, { word: "房租 (ㄈㄤˊ ㄗㄨ)", clue: "在外租屋的大學生每個月要繳的錢" }, { word: "負責 (ㄈㄨˋ ㄗㄜˊ)", clue: "當上幹部之後必須要有的一種態度" }] },
+                { zhuyin: ["ㄅ", "ㄓ"], answers: [{ word: "班長 (ㄅㄢ ㄓㄤˇ)", clue: "班級的領導者，負責喊起立敬禮" }, { word: "佈置 (ㄅㄨˋ ㄓˋ)", clue: "校慶或萬聖節時裝飾教室的行為" }, { word: "畢展 (ㄅㄧˋ ㄓㄢˇ)", clue: "設計系大四畢業前最重要的公開展覽" }] },
+                { zhuyin: ["ㄕ", "ㄊ"], answers: [{ word: "社團 (ㄕㄜˋ ㄊㄨㄢˊ)", clue: "放學後大家依興趣聚在一起參與的活動組織" }, { word: "食堂 (ㄕˊ ㄊㄤˊ)", clue: "中午休息時間吃飯的地方" }, { word: "書套 (ㄕㄨ ㄊㄠˋ)", clue: "開學發新課本時用來保護封面的塑膠膜" }] },
+                { zhuyin: ["ㄒ", "ㄎ"], answers: [{ word: "下課 (ㄒㄧㄚˋ ㄎㄜˋ)", clue: "聽到鐘聲後最期待的事情" }, { word: "學科 (ㄒㄩㄝˊ ㄎㄜ)", clue: "相對於術科，需要在教室裡考試的科目" }, { word: "選課 (ㄒㄩㄢˇ ㄎㄜˋ)", clue: "大學開學前要在系統上搶課的動作" }] },
+                { zhuyin: ["ㄅ", "ㄐ"], answers: [{ word: "筆記 (ㄅㄧˇ ㄐㄧˋ)", clue: "上課時把老師黑板寫的重點抄下來" }, { word: "背景 (ㄅㄟˇ ㄐㄧㄥˇ)", clue: "自我介紹時常會提到的家庭或成長環境" }, { word: "班級 (ㄅㄢ ㄐㄧˊ)", clue: "學校裡依年級劃分的學生群體，如三年二班" }] },
+                { zhuyin: ["ㄉ", "ㄕ", "ㄏ"], answers: [{ word: "讀書會 (ㄉㄨˊ ㄕㄨ ㄏㄨㄟˋ)", clue: "幾個同學聚在一起研討功課的聚會" }, { word: "董事會 (ㄉㄨㄥˇ ㄕˋ ㄏㄨㄟˋ)", clue: "私立學校最高權力決策的開會組織" }, { word: "單身漢 (ㄉㄢ ㄕㄣ ㄏㄢˋ)", clue: "聯誼活動時沒有女伴的男同學" }] },
+                { zhuyin: ["ㄒ", "ㄓ", "ㄕ"], answers: [{ word: "校長室 (ㄒㄧㄠˋ ㄓㄤˇ ㄕˋ)", clue: "學校最大長官辦公的專屬房間" }, { word: "新竹市 (ㄒㄧㄣ ㄓㄨˊ ㄕˋ)", clue: "清華大學與交通大學所在的城市" }, { word: "性知識 (ㄒㄧㄥˋ ㄓ ㄕˋ)", clue: "健康教育課本裡會教導的重要觀念" }] }
+            ],
+            "運動健身": [
+                { zhuyin: ["ㄌ", "ㄑ"], answers: [{ word: "籃球 (ㄌㄢˊ ㄑㄧㄡˊ)", clue: "要把球投進高高框裡的團體運動" }, { word: "壘球 (ㄌㄟˇ ㄑㄧㄡˊ)", clue: "比棒球大顆一點，通常用拋物線投球的打擊運動" }, { word: "冷氣 (ㄌㄥˇ ㄑㄧˋ)", clue: "室內健身房裡一定要開的空調設備" }] },
+                { zhuyin: ["ㄅ", "ㄑ"], answers: [{ word: "棒球 (ㄅㄤˋ ㄑㄧㄡˊ)", clue: "被稱為台灣國球，有九局的紅土運動" }, { word: "冰球 (ㄅㄧㄥ ㄑㄧㄡˊ)", clue: "在滑冰場上拿著長桿子打的激烈運動" }, { word: "壁球 (ㄅㄧˋ ㄑㄧㄡˊ)", clue: "在封閉室內對著牆壁擊打的拍類運動" }] },
+                { zhuyin: ["ㄅ", "ㄌ", "ㄑ"], answers: [{ word: "保齡球 (ㄅㄠˇ ㄌㄧㄥˊ ㄑㄧㄡˊ)", clue: "把球滾出去撞倒十個瓶子的室內運動" }, { word: "棒壘球 (ㄅㄤˋ ㄌㄟˇ ㄑㄧㄡˊ)", clue: "拿球棒打擊的兩種熱門草地運動合稱" }, { word: "不留情 (ㄅㄨˋ ㄌㄧㄡˊ ㄑㄧㄥˊ)", clue: "賽場上拼盡全力，對對手毫不手軟" }] },
+                { zhuyin: ["ㄆ", "ㄅ"], answers: [{ word: "跑步 (ㄆㄠˇ ㄅㄨˋ)", clue: "最基本的有氧運動之一，幾乎不需要特殊器材" }, { word: "平板 (ㄆㄧㄥˊ ㄅㄢˇ)", clue: "核心訓練非常常見的撐體動作" }, { word: "陪伴 (ㄆㄟˊ ㄅㄢˋ)", clue: "去健身房怕無聊，找朋友一起練的情境" }] },
+                { zhuyin: ["ㄩ", "ㄉ"], answers: [{ word: "運動 (ㄩㄣˋ ㄉㄨㄥˋ)", clue: "活動身體以達到健康目的的總稱" }, { word: "預定 (ㄩˋ ㄉㄧㄥˋ)", clue: "去熱門球場或健身房前要先做的卡位動作" }, { word: "閱讀 (ㄩㄝˋ ㄉㄨˊ)", clue: "有些人在踩飛輪時順便看的休閒活動" }] },
+                { zhuyin: ["ㄐ", "ㄆ"], answers: [{ word: "金牌 (ㄐㄧㄣ ㄆㄞˊ)", clue: "奧運比賽第一名拿到的最高榮譽" }, { word: "獎牌 (ㄐㄧㄤˇ ㄆㄞˊ)", clue: "掛在脖子上的各種比賽名次信物" }, { word: "獎品 (ㄐㄧㄤˇ ㄆㄧㄣˇ)", clue: "參加趣味競賽獲勝後拿到的實質禮物" }] },
+                { zhuyin: ["ㄩ", "ㄐ"], answers: [{ word: "瑜伽 (ㄩˊ ㄐㄧㄚ)", clue: "注重呼吸與柔軟度、需要在墊子上做的運動" }, { word: "預警 (ㄩˋ ㄐㄧㄥˇ)", clue: "運動傷害發生前身體給你的痠痛暗示" }, { word: "遇見 (ㄩˋ ㄐㄧㄢˋ)", clue: "在健身房常常碰到熟人的狀況" }] },
+                { zhuyin: ["ㄊ", "ㄐ"], answers: [{ word: "太極 (ㄊㄞˋ ㄐㄧˊ)", clue: "公園裡老人家常打的一種緩慢武術" }, { word: "體檢 (ㄊㄧˇ ㄐㄧㄢˇ)", clue: "報名參加高強度馬拉松前最好先做的身體檢查" }, { word: "提及 (ㄊㄧˊ ㄐㄧˊ)", clue: "教練解說時常會說到的重點注意事項" }] },
+                { zhuyin: ["ㄊ", "ㄘ"], answers: [{ word: "體操 (ㄊㄧˇ ㄘㄠ)", clue: "有單槓、鞍馬、平衡木的柔軟競技運動" }, { word: "題材 (ㄊㄧˊ ㄘㄞˊ)", clue: "運動類電影劇本常探討的熱血故事" }, { word: "天才 (ㄊㄧㄢ ㄘㄞˊ)", clue: "形容運動神經超好、不練就天生神力的人" }] },
+                { zhuyin: ["ㄒ", "ㄌ"], answers: [{ word: "訓練 (ㄒㄩㄣˋ ㄌㄧㄢˋ)", clue: "為了提升運動表現而做的有計畫練習" }, { word: "效力 (ㄒㄧㄠˋ ㄌㄧˋ)", clue: "職業球員簽約後為特定球隊打球的狀態" }, { word: "序列 (ㄒㄩˋ ㄌㄧㄝˋ)", clue: "重訓時每個動作排好的組數順序" }] },
+                { zhuyin: ["ㄐ", "ㄌ"], answers: [{ word: "教練 (ㄐㄧㄠˋ ㄌㄧㄢˋ)", clue: "在場邊指導選手戰術的靈魂人物" }, { word: "經歷 (ㄐㄧㄥ ㄌㄧˋ)", clue: "老將選手身上累積的豐富比賽經驗" }, { word: "建立 (ㄐㄧㄢˋ ㄌㄧˋ)", clue: "健身者最想對身上肌肉做的事情" }] },
+                { zhuyin: ["ㄩ", "ㄑ"], answers: [{ word: "羽球 (ㄩˇ ㄑㄧㄡˊ)", clue: "台灣小戴最擅長的室內拍類運動" }, { word: "運氣 (ㄩㄣˋ ㄑㄧˋ)", clue: "比賽時除了實力之外也很重要的一個因素" }, { word: "勇氣 (ㄩㄥˇ ㄑㄧˋ)", clue: "挑戰極限運動時最需要具備的心理素質" }] },
+                { zhuyin: ["ㄩ", "ㄧ"], answers: [{ word: "越野 (ㄩㄝˋ ㄧㄝˇ)", clue: "不在PU跑道上，而在山林泥地跑的賽事" }, { word: "語音 (ㄩˇ ㄧㄣ)", clue: "跑步APP每一公里會用語音播報配速" }, { word: "擁有 (ㄩㄥˇ ㄧㄡˇ)", clue: "拿到冠軍獎盃後獲得至高榮耀的感受" }] },
+                { zhuyin: ["ㄐ", "ㄕ", "ㄈ"], answers: [{ word: "健身房 (ㄐㄧㄢˋ ㄕㄣ ㄈㄤˊ)", clue: "裡面放滿啞鈴跟機械器材的運動場所" }, { word: "教師法 (ㄐㄧㄠˋ ㄕ ㄈㄚˇ)", clue: "學校體育老師必須遵守的職業法規" }, { word: "決勝負 (ㄐㄩㄝˊ ㄕㄥˋ ㄈㄨˋ)", clue: "比賽到了最後關頭要分出贏家的時刻" }] },
+                { zhuyin: ["ㄅ", "ㄑ", "ㄔ"], answers: [{ word: "棒球場 (ㄅㄤˋ ㄑㄧㄡˊ ㄔㄤˇ)", clue: "大巨蛋或天母等可以看職棒的場地" }, { word: "冰球場 (ㄅㄧㄥ ㄑㄧㄡˊ ㄔㄤˇ)", clue: "溫度很低，地上都是結冰的競技場" }, { word: "不清楚 (ㄅㄨˋ ㄑㄧㄥ ㄔㄨˇ)", clue: "剛看比賽還不懂規則的人常有的狀態" }] }
+            ],
+            "藝術領域": [
+                { zhuyin: ["ㄏ", "ㄏ"], answers: [{ word: "繪畫 (ㄏㄨㄟˋ ㄏㄨㄚˋ)", clue: "用顏料在畫布或紙上創作的視覺藝術" }, { word: "畫畫 (ㄏㄨㄚˋ ㄏㄨㄚˋ)", clue: "小朋友拿著蠟筆最喜歡做的事情" }, { word: "豪華 (ㄏㄠˊ ㄏㄨㄚˊ)", clue: "國家劇院或音樂廳常給人的裝潢感受" }] },
+                { zhuyin: ["ㄕ", "ㄧ"], answers: [{ word: "攝影 (ㄕㄜˋ ㄧㄥˇ)", clue: "拿相機捕捉光影與畫面的藝術" }, { word: "生意 (ㄕㄥ ㄧˋ)", clue: "畫廊賣畫或藝術品買賣的商業行為" }, { word: "手藝 (ㄕㄡˇ ㄧˋ)", clue: "陶藝家或工匠製作作品的靈巧技巧" }] },
+                { zhuyin: ["ㄕ", "ㄈ"], answers: [{ word: "書法 (ㄕㄨ ㄈㄚˇ)", clue: "用毛筆寫字的傳統漢字藝術" }, { word: "示範 (ㄕˋ ㄈㄢˋ)", clue: "美術老師親自畫一次給學生看" }, { word: "舒服 (ㄕㄨ ㄈㄨˊ)", clue: "聽著輕柔的古典音樂時的感受" }] },
+                { zhuyin: ["ㄊ", "ㄑ"], answers: [{ word: "彈琴 (ㄊㄢˊ ㄑㄧㄣˊ)", clue: "手指在黑白鍵盤上敲擊出音樂的動作" }, { word: "提琴 (ㄊㄧˊ ㄑㄧㄣˊ)", clue: "交響樂團中用弓拉弦的木製樂器" }, { word: "天氣 (ㄊㄧㄢ ㄑㄧˋ)", clue: "戶外寫生時畫家最需要注意的自然因素" }] },
+                { zhuyin: ["ㄨ", "ㄉ"], answers: [{ word: "舞蹈 (ㄨˇ ㄉㄠˇ)", clue: "芭蕾、街舞等用身體律動表現的藝術" }, { word: "舞動 (ㄨˇ ㄉㄨㄥˋ)", clue: "隨著音樂節奏揮灑肢體的動作" }, { word: "穩定 (ㄨㄣˇ ㄉㄧㄥˋ)", clue: "拿著畫筆畫細緻線條時手部必須保持的狀態" }] },
+                { zhuyin: ["ㄐ", "ㄩ"], answers: [{ word: "劇院 (ㄐㄩˋ ㄩㄢˋ)", clue: "專門用來演戲劇或音樂劇的場館" }, { word: "局員 (ㄐㄩˊ ㄩㄢˊ)", clue: "文化局裡負責推廣藝術行政的工作人員" }, { word: "教育 (ㄐㄧㄠˋ ㄩˋ)", clue: "培養小朋友美感的扎根過程" }] },
+                { zhuyin: ["ㄐ", "ㄗ"], answers: [{ word: "巨作 (ㄐㄩˋ ㄗㄨㄛˋ)", clue: "藝術大師留傳千古的偉大作品" }, { word: "佳作 (ㄐㄧㄚ ㄗㄨㄛˋ)", clue: "參加美術比賽獲得不錯成績的評語" }, { word: "家族 (ㄐㄧㄚ ㄗㄨˊ)", clue: "歷史上贊助藝術家如麥地奇那樣的貴族" }] },
+                { zhuyin: ["ㄧ", "ㄩ", "ㄐ"], answers: [{ word: "音樂家 (ㄧㄣ ㄩㄝˋ ㄐㄧㄚ)", clue: "貝多芬、莫札特這類職業的人" }, { word: "音樂劇 (ㄧㄣ ㄩㄝˋ ㄐㄩˋ)", clue: "結合演戲跟唱歌的表演，如歌劇魅影" }, { word: "音樂節 (ㄧㄣ ㄩㄝˋ ㄐㄧㄝˊ)", clue: "大港開唱這類連續好幾天的表演盛會" }] },
+                { zhuyin: ["ㄧ", "ㄧ", "ㄐ"], answers: [{ word: "演藝家 (ㄧㄢˇ ㄧˋ ㄐㄧㄚ)", clue: "精通戲劇或表演藝術的大師" }, { word: "演藝界 (ㄧㄢˇ ㄧˋ ㄐㄧㄝˋ)", clue: "明星藝人們身處的工作圈子" }, { word: "影印機 (ㄧㄥˇ ㄧㄣˋ ㄐㄧ)", clue: "設計師常印草圖出來看效果的機器" }] },
+                { zhuyin: ["ㄧ", "ㄩ", "ㄏ"], answers: [{ word: "音樂會 (ㄧㄣ ㄩㄝˋ ㄏㄨㄟˋ)", clue: "坐在台下聽交響樂團演奏的表演" }, { word: "音樂盒 (ㄧㄣ ㄩㄝˋ ㄏㄜˊ)", clue: "轉發條就會發出清脆旋律的精緻裝飾品" }, { word: "亞運會 (ㄧㄚˇ ㄩㄣˋ ㄏㄨㄟˋ)", clue: "雖是體育賽事，但開幕式常充滿大型藝術表演" }] },
+                { zhuyin: ["ㄧ", "ㄔ", "ㄏ"], answers: [{ word: "演唱會 (ㄧㄢˇ ㄔㄤˋ ㄏㄨㄟˋ)", clue: "去小巨蛋聽流行歌手唱歌的活動" }, { word: "演出會 (ㄧㄢˇ ㄔㄨ ㄏㄨㄟˋ)", clue: "發表新作品或舞台劇首演的聚會" }, { word: "陽澄湖 (ㄧㄤˊ ㄔㄥˊ ㄏㄨˊ)", clue: "中國以產大閘蟹聞名的風景區" }] },
+                { zhuyin: ["ㄇ", "ㄕ", "ㄍ"], answers: [{ word: "美術館 (ㄇㄟˇ ㄕㄨˋ ㄍㄨㄢˇ)", clue: "專門展覽畫作、雕塑等視覺藝術的地方" }, { word: "美食館 (ㄇㄟˇ ㄕˊ ㄍㄨㄢˇ)", clue: "百貨公司樓下讓人滿足味蕾的地方" }, { word: "面試官 (ㄇㄧㄢˋ ㄕˋ ㄍㄨㄢ)", clue: "考藝術大學時，坐在前面看你作品集的人" }] }
+            ],
+            "教會團契": [
+                { zhuyin: ["ㄕ", "ㄐ"], answers: [{ word: "聖經 (ㄕㄥˋ ㄐㄧㄥ)", clue: "基督徒聚會必讀的信仰經典" }, { word: "世界 (ㄕˋ ㄐㄧㄝˊ)", clue: "神創造天地的整個宇宙與人間" }, { word: "水晶 (ㄕㄨㄟˇ ㄐㄧㄥ)", clue: "裝飾在教會彩色玻璃旁的透明礦石" }] },
+                { zhuyin: ["ㄉ", "ㄍ"], answers: [{ word: "禱告 (ㄉㄠˇ ㄍㄠˋ)", clue: "向神說話、祈求、感謝，也可以安靜聆聽神的行動" }, { word: "燈光 (ㄉㄥ ㄍㄨㄤ)", clue: "敬拜讚美時舞台上營造氣氛的照明" }, { word: "蛋糕 (ㄉㄢˋ ㄍㄠ)", clue: "團契慶生時一定會切的甜點" }] },
+                { zhuyin: ["ㄧ", "ㄙ"], answers: [{ word: "耶穌 (ㄧㄝˊ ㄙㄨ)", clue: "基督教信仰中最核心的救主" }, { word: "意思 (ㄧˋ ㄙ)", clue: "查經班時探討經文背後的含義" }, { word: "顏色 (ㄧㄢˊ ㄙㄜˋ)", clue: "復活節彩繪蛋上豐富的色彩" }] },
+                { zhuyin: ["ㄇ", "ㄕ"], answers: [{ word: "牧師 (ㄇㄨˋ ㄕ)", clue: "在教會講台上負責講道的神職人員" }, { word: "面試 (ㄇㄧㄢˋ ㄕˋ)", clue: "神學院畢業後應徵服事崗位的過程" }, { word: "名師 (ㄇㄧㄥˊ ㄕ)", clue: "舉辦大型特會時邀請來的知名講員" }] },
+                { zhuyin: ["ㄈ", "ㄧ"], answers: [{ word: "福音 (ㄈㄨˊ ㄧㄣ)", clue: "信徒要把好消息傳給別人的信仰核心" }, { word: "翻譯 (ㄈㄢ ㄧˋ)", clue: "外國宣教士講道時旁邊幫忙用中文講的人" }, { word: "發音 (ㄈㄚ ㄧㄣ)", clue: "唱詩歌時要注意咬字清楚的動作" }] },
+                { zhuyin: ["ㄔ", "ㄅ"], answers: [{ word: "崇拜 (ㄔㄨㄥˊ ㄅㄞˋ)", clue: "主日聚會時對神的敬重與讚美" }, { word: "翅膀 (ㄔˋ ㄅㄤˇ)", clue: "圖片裡天使背後長著的東西" }, { word: "出版 (ㄔㄨ ㄅㄢˇ)", clue: "教會發行屬靈書籍或週報的動作" }] },
+                { zhuyin: ["ㄕ", "ㄍ"], answers: [{ word: "詩歌 (ㄕ ㄍㄜ)", clue: "敬拜時大家一起跟著旋律唱的歌曲" }, { word: "帥哥 (ㄕㄨㄞˋ ㄍㄜ)", clue: "青年團契裡吸引目光的年輕弟兄" }, { word: "施工 (ㄕ ㄍㄨㄥ)", clue: "教會要擴建堂址時進行的工程" }] },
+                { zhuyin: ["ㄕ", "ㄌ"], answers: [{ word: "聖靈 (ㄕㄥˋ ㄌㄧㄥˊ)", clue: "三位一體中賜下感動與恩賜的那一位" }, { word: "實力 (ㄕˊ ㄌㄧˋ)", clue: "敬拜團樂手經過苦練出來的演奏技巧" }, { word: "勝利 (ㄕㄥˋ ㄌㄧˋ)", clue: "靠著信仰戰勝軟弱的得勝宣告" }] },
+                { zhuyin: ["ㄓ", "ㄌ"], answers: [{ word: "長老 (ㄓㄤˇ ㄌㄠˇ)", clue: "教會中資深且協助牧養的屬靈長輩" }, { word: "助理 (ㄓㄨˋ ㄌㄧˇ)", clue: "教會辦公室協助行政庶務的同工" }, { word: "治療 (ㄓˋ ㄌㄧㄠˊ)", clue: "為生病的弟兄姊妹禱告求神醫治" }] },
+                { zhuyin: ["ㄞ", "ㄒ"], answers: [{ word: "愛心 (ㄞˋ ㄒㄧㄣ)", clue: "哥林多前書提到最大的是這個" }, { word: "愛惜 (ㄞˋ ㄒㄧˊ)", clue: "要珍惜神所賜給我們的資源與光陰" }, { word: "矮小 (ㄞˇ ㄒㄧㄠˇ)", clue: "爬到桑樹上看耶穌的撒該的身材特徵" }] },
+                { zhuyin: ["ㄐ", "ㄏ"], answers: [{ word: "教會 (ㄐㄧㄠˋ ㄏㄨㄟˋ)", clue: "基督徒每週日都會去聚會的地方" }, { word: "聚會 (ㄐㄩˋ ㄏㄨㄟˋ)", clue: "弟兄姊妹約好時間一起讀經唱詩的活動" }, { word: "機會 (ㄐㄧ ㄏㄨㄟˋ)", clue: "向尚未信主的親友傳福音的好時機" }] }
+            ],
+            "夜市美食": [
+                { zhuyin: ["ㄐ", "ㄆ"], answers: [{ word: "雞排 (ㄐㄧ ㄆㄞˊ)", clue: "裹粉炸過、夜市必買的超大塊帶骨肉" }, { word: "雞皮 (ㄐㄧ ㄆㄧˊ)", clue: "烤肉攤上脆脆的禽類表皮串燒" }, { word: "鍵盤 (ㄐㄧㄢˋ ㄆㄢˊ)", clue: "雖然不能吃，但是網路鄉民愛用的打字工具" }] },
+                { zhuyin: ["ㄐ", "ㄅ"], answers: [{ word: "煎餅 (ㄐㄧㄢ ㄅㄧㄥˇ)", clue: "麵糊在鐵板上煎出來的點心，有時包蔥或海鮮" }, { word: "醬包 (ㄐㄧㄤˋ ㄅㄠ)", clue: "外帶蚵仔煎或水餃時老闆會附的調味料" }, { word: "疾病 (ㄐㄧˊ ㄅㄧㄥˋ)", clue: "夜市吃太多不衛生的東西可能會得到的狀態" }] },
+                { zhuyin: ["ㄌ", "ㄨ"], answers: [{ word: "滷味 (ㄌㄨˇ ㄨㄟˋ)", clue: "把豆干、海帶、豬血糕放進深色湯汁裡煮的攤位" }, { word: "臘味 (ㄌㄚˋ ㄨㄟˋ)", clue: "有些攤位會賣的廣式香腸風味" }, { word: "禮物 (ㄌㄧˇ ㄨˋ)", clue: "在夜市打彈珠或射氣球贏得的獎品" }] },
+                { zhuyin: ["ㄍ", "ㄅ"], answers: [{ word: "刈包 (ㄍㄨㄚˋ ㄅㄠ)", clue: "又稱台式漢堡，裡面夾爌肉跟花生粉" }, { word: "國寶 (ㄍㄨㄛˊ ㄅㄠˇ)", clue: "故宮博物院裡的翠玉白菜" }, { word: "鍋巴 (ㄍㄨㄛ ㄅㄚ)", clue: "石鍋拌飯底下焦焦脆脆的米飯" }] },
+                { zhuyin: ["ㄉ", "ㄍ"], answers: [{ word: "地瓜 (ㄉㄧˋ ㄍㄨㄚ)", clue: "烤過會很甜，也可以炸成薯條的植物" }, { word: "冬瓜 (ㄉㄨㄥ ㄍㄨㄚ)", clue: "夜市常拿來熬煮成一大桶甜甜茶飲的植物" }, { word: "豆干 (ㄉㄡˋ ㄍㄢ)", clue: "滷味攤必點的方型黃豆製品" }] },
+                { zhuyin: ["ㄏ", "ㄉ"], answers: [{ word: "紅豆 (ㄏㄨㄥˊ ㄉㄡˋ)", clue: "車輪餅裡面最經典的甜味內餡" }, { word: "黑豆 (ㄏㄟ ㄉㄡˋ)", clue: "營養價值很高，常用來釀醬油的豆類" }, { word: "活動 (ㄏㄨㄛˊ ㄉㄨㄥˋ)", clue: "夜市商圈為了招攬客人辦的促銷" }] },
+                { zhuyin: ["ㄕ", "ㄐ"], answers: [{ word: "水餃 (ㄕㄨㄟˇ ㄐㄧㄠˇ)", clue: "皮包肉餡丟在滾水裡煮熟的食物" }, { word: "睡覺 (ㄕㄨㄟˋ ㄐㄧㄠˋ)", clue: "逛完夜市吃飽喝足回家最想做的事" }, { word: "商機 (ㄕㄤ ㄐㄧ)", clue: "夜市人潮帶來龐大的賺錢機會" }] },
+                { zhuyin: ["ㄎ", "ㄖ"], answers: [{ word: "烤肉 (ㄎㄠˇ ㄖㄡˋ)", clue: "把肉串放在炭火上塗醬汁的攤位" }, { word: "控肉 (ㄎㄨㄥˋ ㄖㄡˋ)", clue: "滷得軟爛肥美的豬五花蓋飯" }, { word: "扣肉 (ㄎㄡˋ ㄖㄡˋ)", clue: "梅干菜底下鋪著的圓形五花肉片" }] },
+                { zhuyin: ["ㄔ", "ㄉ", "ㄈ"], answers: [{ word: "臭豆腐 (ㄔㄡˋ ㄉㄡˋ ㄈㄨˇ)", clue: "聞起來很臭但吃起來很香的台灣小吃" }, { word: "炒豆腐 (ㄔㄠˇ ㄉㄡˋ ㄈㄨˇ)", clue: "鐵板燒攤位上師傅用鏟子翻炒的配菜" }, { word: "吃豆腐 (ㄔ ㄉㄡˋ ㄈㄨˇ)", clue: "中文裡用來形容佔別人便宜的一種說法" }] },
+                { zhuyin: ["ㄉ", "ㄍ", "ㄑ"], answers: [{ word: "地瓜球 (ㄉㄧˋ ㄍㄨㄚ ㄑㄧㄡˊ)", clue: "油鍋裡壓扁後會膨脹的空心甜點" }, { word: "蛋糕裙 (ㄉㄢˋ ㄍㄠ ㄑㄩㄣˊ)", clue: "夜市服飾攤賣的一層一層的女孩裙子" }, { word: "帶感情 (ㄉㄞˋ ㄍㄢˇ ㄑㄧㄥˊ)", clue: "老闆叫賣時聲音非常投入的狀態" }] },
+                { zhuyin: ["ㄉ", "ㄍ", "ㄔ"], answers: [{ word: "冬瓜茶 (ㄉㄨㄥ ㄍㄨㄚ ㄔㄚ)", clue: "吃完炸物解渴必喝的古早味飲料" }, { word: "膽固醇 (ㄉㄢˇ ㄍㄨˋ ㄔㄨㄣˊ)", clue: "夜市吃太多內臟和炸物後身體會飆高的指數" }, { word: "代工廠 (ㄉㄞˋ ㄍㄨㄥ ㄔㄤˇ)", clue: "提供夜市攤販冷凍食材的上游來源" }] },
+                { zhuyin: ["ㄓ", "ㄒ", "ㄍ"], answers: [{ word: "豬血糕 (ㄓㄨ ㄒㄧㄝˇ ㄍㄠ)", clue: "沾滿花生粉跟香菜的深色長條狀小吃" }, { word: "照相館 (ㄓㄠˋ ㄒㄧㄤˋ ㄍㄨㄢˇ)", clue: "夜市旁邊可以拍證件照的店面" }, { word: "執行官 (ㄓˊ ㄒㄧㄥˊ ㄍㄨㄢ)", clue: "負責管理夜市攤販秩序的主管職" }] },
+                { zhuyin: ["ㄓ", "ㄒ", "ㄊ"], answers: [{ word: "豬血湯 (ㄓㄨ ㄒㄧㄝˇ ㄊㄤ)", clue: "裡面有紅蔥頭跟沙茶的深紅色方塊湯" }, { word: "豬心湯 (ㄓㄨ ㄒㄧㄣ ㄊㄤ)", clue: "冬天進補時賣的內臟類熱湯" }, { word: "主席台 (ㄓㄨˇ ㄒㄧˊ ㄊㄞˊ)", clue: "夜市舉辦摸彩大會時主持人站的高台" }] },
+                { zhuyin: ["ㄓ", "ㄩ"], answers: [{ word: "章魚 (ㄓㄤ ㄩˊ)", clue: "切成小塊塞進圓滾滾麵糊裡燒烤的海鮮" }, { word: "蒸魚 (ㄓㄥ ㄩˊ)", clue: "海鮮熱炒攤上用清蒸方式料理的菜色" }, { word: "陣雨 (ㄓㄣˋ ㄩˇ)", clue: "露天夜市攤販最討厭碰到的天氣狀況" }] }
+            ],
+            "職場生活": [
+                { zhuyin: ["ㄉ", "ㄎ"], answers: [{ word: "打卡 (ㄉㄚˇ ㄎㄚˇ)", clue: "每天早上進公司第一件必須做的事" }, { word: "貸款 (ㄉㄞˋ ㄎㄨㄢˇ)", clue: "上班族每個月薪水要拿去還銀行的錢" }, { word: "對抗 (ㄉㄨㄟˋ ㄎㄤˋ)", clue: "在會議上與不同部門據理力爭" }] },
+                { zhuyin: ["ㄎ", "ㄏ"], answers: [{ word: "開會 (ㄎㄞ ㄏㄨㄟˋ)", clue: "一群人關在會議室裡討論工作進度的活動" }, { word: "客戶 (ㄎㄜˋ ㄏㄨˋ)", clue: "公司花錢買你產品或服務的對象" }, { word: "恐嚇 (ㄎㄨㄥˇ ㄏㄜˋ)", clue: "遇到不講理的奧客時可能會遭受的言語威脅" }] },
+                { zhuyin: ["ㄅ", "ㄍ"], answers: [{ word: "報告 (ㄅㄠˋ ㄍㄠˋ)", clue: "用PPT做出來要上台報給老闆聽的東西" }, { word: "辦公 (ㄅㄢˋ ㄍㄨㄥ)", clue: "坐在電腦前面處理公司事務的行為" }, { word: "包裹 (ㄅㄠ ㄍㄨㄛˇ)", clue: "上班時偷偷網購送到公司櫃台的東西" }] },
+                { zhuyin: ["ㄓ", "ㄍ"], answers: [{ word: "主管 (ㄓㄨˇ ㄍㄨㄢˇ)", clue: "負責打你考績、管你請假的上司" }, { word: "掌管 (ㄓㄤˇ ㄍㄨㄢˇ)", clue: "經理級以上負責管理整個部門的權力" }, { word: "質感 (ㄓˊ ㄍㄢˇ)", clue: "行銷提案時設計素材給人的高級感覺" }] },
+                { zhuyin: ["ㄒ", "ㄅ"], answers: [{ word: "下班 (ㄒㄧㄚˋ ㄅㄢ)", clue: "到了下午六點員工最期待的兩個字" }, { word: "宣布 (ㄒㄩㄢ ㄅㄨˋ)", clue: "公司發出重要人事命令的動作" }, { word: "細胞 (ㄒㄧˋ ㄅㄠ)", clue: "加班熬夜時死掉很多的東西" }] },
+                { zhuyin: ["ㄐ", "ㄅ"], answers: [{ word: "加班 (ㄐㄧㄚ ㄅㄢ)", clue: "過了下班時間還繼續留在公司工作的悲慘事" }, { word: "交班 (ㄐㄧㄠ ㄅㄢ)", clue: "輪班制的工作，把進度告訴下一班的人" }, { word: "舉辦 (ㄐㄩˇ ㄅㄢˋ)", clue: "福委會籌劃公司尾牙的行為" }] },
+                { zhuyin: ["ㄔ", "ㄔ"], answers: [{ word: "出差 (ㄔㄨ ㄔㄞ)", clue: "離開公司去外縣市或國外辦公" }, { word: "抽查 (ㄔㄡ ㄔㄚ)", clue: "品管部門隨機檢驗生產線產品的動作" }, { word: "傳承 (ㄔㄨㄢˊ ㄔㄥˊ)", clue: "資深老鳥把工作秘訣教給菜鳥" }] },
+                { zhuyin: ["ㄇ", "ㄕ"], answers: [{ word: "面試 (ㄇㄧㄢˋ ㄕˋ)", clue: "進公司前要跟人資和主管面對面談話的關卡" }, { word: "秘書 (ㄇㄧˋ ㄕㄨ)", clue: "負責幫老闆排行程、訂高鐵票的職位" }, { word: "陌生 (ㄇㄛˋ ㄕㄥ)", clue: "第一天到新部門報到時對環境的感覺" }] },
+                { zhuyin: ["ㄌ", "ㄅ"], answers: [{ word: "老闆 (ㄌㄠˇ ㄅㄢˇ)", clue: "發薪水給你、公司最高權力的人" }, { word: "領班 (ㄌㄧㄥˇ ㄅㄢ)", clue: "工廠生產線上帶領作業員的小主管" }, { word: "喇叭 (ㄌㄚˇ ㄅㄚ)", clue: "同事在辦公室播音樂太吵會被抗議的設備" }] },
+                { zhuyin: ["ㄕ", "ㄑ"], answers: [{ word: "升遷 (ㄕㄥ ㄑㄧㄢ)", clue: "職位變高、薪水變多的好事情" }, { word: "申請 (ㄕㄣ ㄑㄧㄥˇ)", clue: "需要文具或請假時要填表單的動作" }, { word: "授權 (ㄕㄡˋ ㄑㄩㄢˊ)", clue: "老闆放手讓你決定專案預算的權力" }] },
+                { zhuyin: ["ㄑ", "ㄐ"], answers: [{ word: "請假 (ㄑㄧㄥˇ ㄐㄧㄚˋ)", clue: "生病或想出去玩時不上班的程序" }, { word: "契機 (ㄑㄧˋ ㄐㄧ)", clue: "公司業績轉虧為盈的重要轉折點" }, { word: "清潔 (ㄑㄧㄥ ㄐㄧㄝˊ)", clue: "打掃阿姨負責維持辦公室環境的工作" }] },
+                { zhuyin: ["ㄋ", "ㄓ"], answers: [{ word: "年終 (ㄋㄧㄢˊ ㄓㄨㄥ)", clue: "過年前發的一筆獎金，大家最期待" }, { word: "內政 (ㄋㄟˋ ㄓㄥˋ)", clue: "公司裡部的行政管理規則" }, { word: "逆轉 (ㄋㄧˋ ㄓㄨㄢˇ)", clue: "提案原本要輸了，最後成功拿下的狀況" }] },
+                { zhuyin: ["ㄧ", "ㄐ"], answers: [{ word: "業績 (ㄧㄝˋ ㄐㄧ)", clue: "業務部門每個月要追著跑的數字" }, { word: "郵局 (ㄧㄡˊ ㄐㄩˊ)", clue: "總務常常要去寄掛號信的地方" }, { word: "依據 (ㄧ ㄐㄩˋ)", clue: "要求加薪時必須提出來的貢獻證明" }] },
+                { zhuyin: ["ㄑ", "ㄐ", "ㄉ"], answers: [{ word: "請假單 (ㄑㄧㄥˇ ㄐㄧㄚˋ ㄉㄢ)", clue: "想休假時必須在系統上填寫送出的表單" }, { word: "清潔隊 (ㄑㄧㄥ ㄐㄧㄝˊ ㄉㄨㄟˋ)", clue: "公司大樓負責收垃圾的辛苦人員" }, { word: "旗艦店 (ㄑㄧˊ ㄐㄧㄢˋ ㄉㄧㄢˋ)", clue: "品牌開在最熱鬧地段的最大間門市" }] },
+                { zhuyin: ["ㄅ", "ㄌ"], answers: [{ word: "霸凌 (ㄅㄚˋ ㄌㄧㄥˊ)", clue: "職場上被老鳥聯合欺負的惡劣行為" }, { word: "辦理 (ㄅㄢˋ ㄌㄧˇ)", clue: "人資幫新進員工弄勞健保的手續" }, { word: "便利 (ㄅㄧㄢˋ ㄌㄧˋ)", clue: "公司樓下有超商對員工來說的好處" }] }
+            ],
+            "流行娛樂": [
+                { zhuyin: ["ㄉ", "ㄧ"], answers: [{ word: "電影 (ㄉㄧㄢˋ ㄧㄥˇ)", clue: "去威秀或國賓買票坐在暗黑廳裡看的影片" }, { word: "導演 (ㄉㄠˇ ㄧㄢˇ)", clue: "在片場喊 Action 的靈魂人物" }, { word: "電音 (ㄉㄧㄢˋ ㄧㄣ)", clue: "夜店裡常放的那種節奏很重的音樂" }] },
+                { zhuyin: ["ㄇ", "ㄒ"], answers: [{ word: "明星 (ㄇㄧㄥˊ ㄒㄧㄥ)", clue: "電視上光鮮亮麗的公眾人物" }, { word: "模型 (ㄇㄛˊ ㄒㄧㄥˊ)", clue: "動漫迷喜歡收集的塑膠組裝玩具" }, { word: "夢想 (ㄇㄥˋ ㄒㄧㄤˇ)", clue: "參加選秀節目的人最想實現的願望" }] },
+                { zhuyin: ["ㄓ", "ㄐ"], answers: [{ word: "追劇 (ㄓㄨㄟ ㄐㄩˋ)", clue: "下班後在 Netflix 上一集接一集看的行為" }, { word: "主角 (ㄓㄨˇ ㄐㄧㄠˇ)", clue: "戲劇中戲份最重的第一男或女演員" }, { word: "助教 (ㄓㄨˋ ㄐㄧㄠˋ)", clue: "在大學影視科系裡幫老師點名的人" }] },
+                { zhuyin: ["ㄓ", "ㄅ"], answers: [{ word: "直播 (ㄓˊ ㄅㄛ)", clue: "YouTuber 或網紅在網路上即時與粉絲互動" }, { word: "主播 (ㄓㄨˇ ㄅㄛ)", clue: "在新聞台負責播報新聞的人" }, { word: "轉播 (ㄓㄨㄢˇ ㄅㄛ)", clue: "電視台買下奧運訊號播給全國看" }] },
+                { zhuyin: ["ㄈ", "ㄙ"], answers: [{ word: "粉絲 (ㄈㄣˇ ㄙ)", clue: "瘋狂熱愛某個偶像的追隨者" }, { word: "複賽 (ㄈㄨˋ ㄙㄞˋ)", clue: "選秀節目過了海選之後的晉級比賽" }, { word: "封鎖 (ㄈㄥ ㄙㄨㄛˇ)", clue: "藝人對於網路酸民留言的終極處置" }] },
+                { zhuyin: ["ㄍ", "ㄕ"], answers: [{ word: "歌手 (ㄍㄜ ㄕㄡˇ)", clue: "周杰倫、蔡依林的職業" }, { word: "歌神 (ㄍㄜ ㄕㄣˊ)", clue: "張學友在華語樂壇的美稱" }, { word: "歌聲 (ㄍㄜ ㄕㄥ)", clue: "參加歌唱選秀節目最看重的評分項目" }] },
+                { zhuyin: ["ㄨ", "ㄊ"], answers: [{ word: "舞台 (ㄨˇ ㄊㄞˊ)", clue: "演唱會上藝人站的那個發光的高台" }, { word: "舞廳 (ㄨˇ ㄊㄧㄥ)", clue: "有著大顆旋轉霓虹燈的跳舞場所" }, { word: "舞團 (ㄨˇ ㄊㄨㄢˊ)", clue: "在藝人後面幫忙伴舞的職業團體" }] },
+                { zhuyin: ["ㄒ", "ㄐ"], answers: [{ word: "喜劇 (ㄒㄧˋ ㄐㄩˋ)", clue: "會讓人哈哈大笑的幽默電影類型" }, { word: "現金 (ㄒㄧㄢˋ ㄐㄧㄣ)", clue: "去沒電子支付的KTV唱歌要帶的東西" }, { word: "戲劇 (ㄒㄧˋ ㄐㄩˋ)", clue: "金鐘獎會頒獎表揚的電視節目類型" }] },
+                { zhuyin: ["ㄐ", "ㄑ"], answers: [{ word: "金曲 (ㄐㄧㄣ ㄑㄩˇ)", clue: "台灣樂壇每年頒發的最高榮譽獎項" }, { word: "劇情 (ㄐㄩˋ ㄑㄧㄥˊ)", clue: "看電影時最怕被朋友暴雷的內容" }, { word: "技巧 (ㄐㄧˋ ㄑㄧㄠˇ)", clue: "歌手展現轉音或真假音轉換的能力" }] }
+            ],
+            "動漫電玩": [
+                { zhuyin: ["ㄇ", "ㄏ"], answers: [{ word: "漫畫 (ㄇㄢˋ ㄏㄨㄚˋ)", clue: "海賊王、火影忍者這種畫在紙上的書" }, { word: "名畫 (ㄇㄧㄥˊ ㄏㄨㄚˋ)", clue: "遊戲場景中有時會借用的世界藝術品" }, { word: "夢幻 (ㄇㄥˋ ㄏㄨㄢˋ)", clue: "寶可夢裡一隻粉紅色超能力系的神獸" }] },
+                { zhuyin: ["ㄉ", "ㄏ"], answers: [{ word: "動畫 (ㄉㄨㄥˋ ㄏㄨㄚˋ)", clue: "漫畫做成會在電視上動起來播出的版本" }, { word: "導航 (ㄉㄠˇ ㄏㄤˊ)", clue: "開放世界遊戲中指引你接任務方向的系統" }, { word: "電話 (ㄉㄧㄢˋ ㄏㄨㄚˋ)", clue: "GTA遊戲裡常接到的任務聯絡工具" }] },
+                { zhuyin: ["ㄍ", "ㄎ"], answers: [{ word: "關卡 (ㄍㄨㄢ ㄎㄚˇ)", clue: "超級瑪利歐要一關一關通過的階段設計" }, { word: "顧客 (ㄍㄨˋ ㄎㄜˋ)", clue: "經營模擬遊戲中來你店裡消費的NPC" }, { word: "功課 (ㄍㄨㄥ ㄎㄜˋ)", clue: "學生下課後必須先做完才能打電動的東西" }] },
+                { zhuyin: ["ㄍ", "ㄨ"], answers: [{ word: "怪物 (ㄍㄨㄞˋ ㄨˋ)", clue: "RPG遊戲裡在野外遇到要打倒的敵人" }, { word: "購物 (ㄍㄡˋ ㄨˋ)", clue: "在遊戲商城裡花金幣買裝備的行為" }, { word: "鬼屋 (ㄍㄨㄟˇ ㄨ)", clue: "恐怖遊戲最愛設定的經典陰森場景" }] },
+                { zhuyin: ["ㄎ", "ㄐ"], answers: [{ word: "課金 (ㄎㄜˋ ㄐㄧㄣ)", clue: "花現實的新台幣去抽手遊角色的行為" }, { word: "快捷 (ㄎㄨㄞˋ ㄐㄧㄝˊ)", clue: "鍵盤上放招式很方便的按鍵列" }, { word: "空間 (ㄎㄨㄥ ㄐㄧㄢ)", clue: "下載3A大作前硬碟必須要有的容量" }] },
+                { zhuyin: ["ㄔ", "ㄎ"], answers: [{ word: "抽卡 (ㄔㄡ ㄎㄚˇ)", clue: "手遊裡花石頭想要獲得SSR角色的靠運氣機制" }, { word: "觸控 (ㄔㄨˋ ㄎㄨㄥˋ)", clue: "在平板或手機上玩遊戲的主要操作方式" }, { word: "長褲 (ㄔㄤˊ ㄎㄨˋ)", clue: "許多遊戲角色基礎服裝的下半身裝備" }] },
+                { zhuyin: ["ㄕ", "ㄧ"], answers: [{ word: "手遊 (ㄕㄡˇ ㄧㄡˊ)", clue: "裝在智慧型手機裡玩的遊戲簡稱" }, { word: "攝影 (ㄕㄜˋ ㄧㄥˇ)", clue: "遊戲裡內建拍照模式的功能" }, { word: "適應 (ㄕˋ ㄧㄥˋ)", clue: "換了新手把或滑鼠後需要熟悉手感的過程" }] },
+                { zhuyin: ["ㄓ", "ㄐ"], answers: [{ word: "主機 (ㄓㄨˇ ㄐㄧ)", clue: "PS5、Switch 等專門用來打電動的硬體" }, { word: "戰績 (ㄓㄢˋ ㄐㄧ)", clue: "射擊遊戲結算畫面顯示的殺敵數與死亡數" }, { word: "專家 (ㄓㄨㄢ ㄐㄧㄚ)", clue: "遊戲論壇上專門寫攻略教人的大神" }] },
+                { zhuyin: ["ㄓ", "ㄉ"], answers: [{ word: "戰鬥 (ㄓㄢˋ ㄉㄡˋ)", clue: "遊戲中遇到敵人進入拔刀相向的狀態" }, { word: "陣地 (ㄓㄣˋ ㄉㄧˋ)", clue: "塔防遊戲裡要保護的大本營" }, { word: "炸彈 (ㄓㄚˋ ㄉㄢˋ)", clue: "瑪利歐賽車裡可以丟別人的黑色圓球武器" }] },
+                { zhuyin: ["ㄇ", "ㄨ"], answers: [{ word: "魔王 (ㄇㄛˊ ㄨㄤˊ)", clue: "遊戲最後一關要打的超強大Boss" }, { word: "迷惘 (ㄇㄧˊ ㄨㄤˇ)", clue: "遊戲卡關不知道接下來要去哪裡的心情" }, { word: "美味 (ㄇㄟˇ ㄨㄟˋ)", clue: "魔物獵人裡烤肉成功後會發出的讚嘆" }] },
+                { zhuyin: ["ㄓ", "ㄅ"], answers: [{ word: "裝備 (ㄓㄨㄤ ㄅㄟˋ)", clue: "角色身上穿的盔甲、拿的武器統稱" }, { word: "主播 (ㄓㄨˇ ㄅㄛ)", clue: "在 Twitch 上開台打電動給別人看的人" }, { word: "周邊 (ㄓㄡ ㄅㄧㄢ)", clue: "動漫紅了之後出的馬克杯、鑰匙圈等商品" }] },
+                { zhuyin: ["ㄔ", "ㄇ"], answers: [{ word: "超夢 (ㄔㄠ ㄇㄥˋ)", clue: "寶可夢初代最強大的人造傳說神獸" }, { word: "充滿 (ㄔㄨㄥ ㄇㄢˇ)", clue: "大絕招的怒氣條集到100%的狀態" }, { word: "籌碼 (ㄔㄡˊ ㄇㄚˇ)", clue: "遊戲中賭場小遊戲用來下注的硬幣" }] }
+            ],
+            "旅遊生活": [
+                { zhuyin: ["ㄍ", "ㄒ"], answers: [{ word: "高雄 (ㄍㄠ ㄒㄧㄨㄥ)", clue: "台灣南部有捷運、愛河的大城市" }, { word: "國小 (ㄍㄨㄛˊ ㄒㄧㄠˇ)", clue: "全家出遊時小朋友的就學年紀" }, { word: "搞笑 (ㄍㄠˇ ㄒㄧㄠˋ)", clue: "旅途中朋友耍寶逗大家開心的行為" }] },
+                { zhuyin: ["ㄐ", "ㄔ"], answers: [{ word: "機場 (ㄐㄧ ㄔㄤˇ)", clue: "出國搭飛機一定要去報到的地方" }, { word: "警車 (ㄐㄧㄥˇ ㄔㄜ)", clue: "在國外自駕超速時會追過來的車子" }, { word: "堅持 (ㄐㄧㄢ ㄔˊ)", clue: "自由行走到腳很痠還要繼續走完景點的意志" }] },
+                { zhuyin: ["ㄏ", "ㄔ"], answers: [{ word: "火車 (ㄏㄨㄛˇ ㄔㄜ)", clue: "台鐵在鐵軌上跑的長途交通工具" }, { word: "貨車 (ㄏㄨㄛˋ ㄔㄜ)", clue: "高速公路上載滿貨物的大型車輛" }, { word: "恆春 (ㄏㄥˊ ㄔㄨㄣ)", clue: "去墾丁玩一定會經過的南部古城地名" }] },
+                { zhuyin: ["ㄈ", "ㄐ"], answers: [{ word: "飛機 (ㄈㄟ ㄐㄧ)", clue: "出國跨越海洋必須搭乘的航空交通工具" }, { word: "風景 (ㄈㄥ ㄐㄧㄥˇ)", clue: "旅遊時看到的美麗山水與景色" }, { word: "房間 (ㄈㄤˊ ㄐㄧㄢ)", clue: "到了飯店 Check-in 後拿到鑰匙要進去的地方" }] },
+                { zhuyin: ["ㄏ", "ㄓ"], answers: [{ word: "護照 (ㄏㄨˋ ㄓㄠˋ)", clue: "出國一定要帶的綠色小本子身分證明" }, { word: "航站 (ㄏㄤˊ ㄓㄢˋ)", clue: "桃園機場分為第一和第二的建築物" }, { word: "合照 (ㄏㄜˊ ㄓㄠˋ)", clue: "到景點時一群人湊在一起拍的照片" }] },
+                { zhuyin: ["ㄈ", "ㄉ"], answers: [{ word: "飯店 (ㄈㄢˋ ㄉㄧㄢˋ)", clue: "旅遊時晚上花錢睡覺的高級住宿場所" }, { word: "飛碟 (ㄈㄟ ㄉㄧㄝˊ)", clue: "去美國51區旅遊可能會想看到的神秘物體" }, { word: "反對 (ㄈㄢˇ ㄉㄨㄟˋ)", clue: "討論行程時朋友不想去某個景點的意見" }] },
+                { zhuyin: ["ㄐ", "ㄉ"], answers: [{ word: "景點 (ㄐㄧㄥˇ ㄉㄧㄢˋ)", clue: "旅遊行程表上排定要去參觀的著名地方" }, { word: "酒店 (ㄐㄧㄡˇ ㄉㄧㄢˋ)", clue: "出國時用來稱呼高級住宿飯店的另一種說法" }, { word: "簡單 (ㄐㄧㄢˇ ㄉㄢ)", clue: "跟團旅遊不用自己排行程的輕鬆特點" }] },
+                { zhuyin: ["ㄒ", "ㄌ"], answers: [{ word: "行李 (ㄒㄧㄥˊ ㄌㄧˇ)", clue: "出國用大箱子裝滿衣服跟用品的東西" }, { word: "洗禮 (ㄒㄧˇ ㄌㄧˇ)", clue: "去國外體驗不同文化衝擊的形容詞" }, { word: "系列 (ㄒㄧˋ ㄌㄧㄝˋ)", clue: "知名連鎖飯店旗下不同等級的品牌分類" }] },
+                { zhuyin: ["ㄇ", "ㄙ"], answers: [{ word: "民宿 (ㄇㄧㄣˊ ㄙㄨˋ)", clue: "去清境或花蓮玩常住的溫馨私人建築" }, { word: "民俗 (ㄇㄧㄣˊ ㄙㄨˊ)", clue: "體驗當地部落傳統文化的風土人情" }, { word: "摸索 (ㄇㄛ ㄙㄨㄛˇ)", clue: "在國外不用導航自己找路的探險過程" }] },
+                { zhuyin: ["ㄇ", "ㄆ"], answers: [{ word: "門票 (ㄇㄣˊ ㄆㄧㄠˋ)", clue: "進去遊樂園或博物館要花錢買的入場券" }, { word: "名牌 (ㄇㄧㄥˊ ㄆㄞˊ)", clue: "去歐洲 Outlet 大家最喜歡掃貨的精品" }, { word: "名片 (ㄇㄧㄥˊ ㄆㄧㄢˋ)", clue: "去好吃餐廳時會拿一張留作紀念的卡片" }] },
+                { zhuyin: ["ㄉ", "ㄧ"], answers: [{ word: "導遊 (ㄉㄠˇ ㄧㄡˊ)", clue: "跟團時拿著旗子在前面解說帶路的人" }, { word: "電影 (ㄉㄧㄢˋ ㄧㄥˇ)", clue: "搭長途飛機時在螢幕上看來打發時間的東西" }, { word: "單一 (ㄉㄢ ㄧ)", clue: "自助旅行時為了省錢只吃同一種食物" }] },
+                { zhuyin: ["ㄉ", "ㄊ"], answers: [{ word: "地圖 (ㄉㄧˋ ㄊㄨˊ)", clue: "旅遊迷路時用手機Google打開來看的畫面" }, { word: "大廳 (ㄉㄚˋ ㄊㄧㄥ)", clue: "飯店一樓可以坐在沙發上等候的地方" }, { word: "電梯 (ㄉㄧㄢˋ ㄊㄧ)", clue: "拿著很重的行李時最需要搭的升降設備" }] },
+                { zhuyin: ["ㄇ", "ㄉ", "ㄌ"], answers: [{ word: "麥當勞 (ㄇㄞˋ ㄉㄤ ㄌㄠˊ)", clue: "出國不知道吃什麼時最安全的速食店" }, { word: "馬德里 (ㄇㄚˇ ㄉㄜˊ ㄌㄧˇ)", clue: "西班牙的首都，著名旅遊城市" }, { word: "曼德拉 (ㄇㄢˋ ㄉㄜˊ ㄌㄚ)", clue: "去南非旅遊時常聽到的著名歷史人名" }] },
+                { zhuyin: ["ㄌ", "ㄧ"], answers: [{ word: "露營 (ㄌㄨˋ ㄧㄥˊ)", clue: "帶帳篷去山上住一晚的戶外旅遊方式" }, { word: "旅遊 (ㄌㄩˇ ㄧㄡˊ)", clue: "離開居住地去別的地方玩樂的統稱" }, { word: "理由 (ㄌㄧˇ ㄧㄡˊ)", clue: "跟老闆請特休或安排旅程時常會說明的原因" }] },
+                { zhuyin: ["ㄍ", "ㄊ"], answers: [{ word: "高鐵 (ㄍㄠ ㄊㄧㄝˇ)", clue: "台灣西部最快的大眾運輸交通工具" }, { word: "溝通 (ㄍㄡ ㄊㄨㄥ)", clue: "出國用破英文加上比手畫腳的交流" }, { word: "骨頭 (ㄍㄨˇ ㄊㄡˊ)", clue: "出國玩走到全身痠痛快散掉的身體部位" }] }
+            ]
+        };
+
+        function escapeHTML(value) {
+            return String(value ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function loadCustomTopicDatabases() {
+            try {
+                const raw = localStorage.getItem(CUSTOM_TOPIC_STORAGE_KEY);
+                const parsed = raw ? JSON.parse(raw) : {};
+                CUSTOM_TOPIC_DATABASES = (parsed && typeof parsed === "object") ? parsed : {};
+            } catch (error) {
+                console.warn("無法讀取 AI 自訂題庫：", error);
+                CUSTOM_TOPIC_DATABASES = {};
+            }
+        }
+
+        function persistCustomTopicDatabases() {
+            try {
+                localStorage.setItem(CUSTOM_TOPIC_STORAGE_KEY, JSON.stringify(CUSTOM_TOPIC_DATABASES));
+            } catch (error) {
+                console.warn("無法儲存 AI 自訂題庫：", error);
+            }
+        }
+
+        function getAllTopicDatabases() {
+            return { ...PRESET_TOPIC_DATABASES, ...CUSTOM_TOPIC_DATABASES };
+        }
+
+        function isCustomTopicKey(key) {
+            return Object.prototype.hasOwnProperty.call(CUSTOM_TOPIC_DATABASES, key);
+        }
+
+        function displayTopicName(key) {
+            return isCustomTopicKey(key) ? key.replace(/^AI｜/, "") : key;
+        }
+
+        function removeCustomTopic(key, event) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+            if (!isCustomTopicKey(key)) return;
+            const displayName = displayTopicName(key);
+            if (!confirm(`要刪除 AI 題庫「${displayName}」嗎？`)) return;
+            delete CUSTOM_TOPIC_DATABASES[key];
+            persistCustomTopicDatabases();
+            if (selectedTopicKey === key) selectedTopicKey = "ALL";
+            renderTopicsGrid();
+            showToast("已刪除 AI 題庫", `「${escapeHTML(displayName)}」已從這台裝置移除。`);
+        }
+
+        function initializeApp() {
+            loadCustomTopicDatabases();
+            renderTopicsGrid();
+            setupKeyboardShortcuts();
+            const aiTopicInput = document.getElementById("aiTopicInput");
+            if (aiTopicInput) {
+                aiTopicInput.addEventListener("keydown", (event) => {
+                    if (event.key === "Enter") generateAITopic();
+                });
+            }
+        }
+
+        // 不等待字型、圖示、CDN 等外部資源；DOM 一完成就先載入固定題庫。
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", initializeApp, { once: true });
+        } else {
+            initializeApp();
+        }
+
+        function switchPage(pageId) {
+            document.getElementById("pageSetup").classList.add("hidden");
+            document.getElementById("pageQuestion").classList.add("hidden");
+            document.getElementById("pageVictory").classList.add("hidden");
+            document.getElementById(pageId).classList.remove("hidden");
+            if (pageId === "pageQuestion") {
+                startTimer();
+            } else {
+                clearInterval(timerInterval);
+            }
+        }
+
+        function renderTopicsGrid() {
+            const grid = document.getElementById("topicsGrid");
+            grid.innerHTML = "";
+            const allDatabases = getAllTopicDatabases();
+
+            // "All Topics" Card
+            const allBtn = document.createElement("div");
+            allBtn.className = `p-4 rounded-xl border cursor-pointer transition flex flex-col justify-between ${selectedTopicKey === 'ALL' ? 'bg-indigo-600/30 border-indigo-500 glow-blue' : 'bg-slate-800/60 border-slate-700/80 hover:bg-slate-800'}`;
+            allBtn.onclick = () => selectTopic('ALL');
+            allBtn.innerHTML = `
+                <div class="font-bold text-sm text-white flex items-center justify-between">
+                    <span>全部綜合題目</span>
+                    <i class="fa-solid fa-shapes text-indigo-400"></i>
+                </div>
+                <div class="text-xs text-slate-400 mt-2">包含所有內建與已儲存 AI 題庫</div>
+            `;
+            grid.appendChild(allBtn);
+
+            let totalCount = 0;
+            Object.keys(PRESET_TOPIC_DATABASES).forEach(key => {
+                const count = PRESET_TOPIC_DATABASES[key].length;
+                totalCount += count;
+                const card = document.createElement("div");
+                const isSelected = (selectedTopicKey === key);
+                card.className = `p-4 rounded-xl border cursor-pointer transition flex flex-col justify-between ${isSelected ? 'bg-indigo-600/30 border-indigo-500 glow-blue' : 'bg-slate-800/60 border-slate-700/80 hover:bg-slate-800'}`;
+                card.onclick = () => selectTopic(key);
+                card.innerHTML = `
+                    <div class="font-bold text-sm text-white flex items-center justify-between">
+                        <span>${escapeHTML(key)}</span>
+                        <span class="text-xs text-slate-400 bg-slate-900 px-2 py-0.5 rounded-full">${count} 題</span>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+
+            Object.keys(CUSTOM_TOPIC_DATABASES).forEach(key => {
+                const count = CUSTOM_TOPIC_DATABASES[key].length;
+                totalCount += count;
+                const card = document.createElement("div");
+                const isSelected = (selectedTopicKey === key);
+                card.className = `p-4 rounded-xl border cursor-pointer transition flex flex-col justify-between ${isSelected ? 'bg-fuchsia-600/25 border-fuchsia-400 glow-blue' : 'bg-fuchsia-950/20 border-fuchsia-500/30 hover:bg-fuchsia-950/35'}`;
+                card.onclick = () => selectTopic(key);
+
+                const header = document.createElement("div");
+                header.className = "font-bold text-sm text-white flex items-start justify-between gap-2";
+
+                const label = document.createElement("span");
+                label.className = "leading-tight";
+                label.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-fuchsia-300 mr-1"></i>${escapeHTML(displayTopicName(key))}`;
+
+                const deleteBtn = document.createElement("button");
+                deleteBtn.type = "button";
+                deleteBtn.className = "shrink-0 text-slate-500 hover:text-rose-400";
+                deleteBtn.title = "刪除此 AI 題庫";
+                deleteBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+                deleteBtn.addEventListener("click", (event) => removeCustomTopic(key, event));
+
+                const meta = document.createElement("div");
+                meta.className = "text-xs text-fuchsia-300/80 mt-2";
+                meta.textContent = `AI 即時題庫 · ${count} 題`;
+
+                header.appendChild(label);
+                header.appendChild(deleteBtn);
+                card.appendChild(header);
+                card.appendChild(meta);
+                grid.appendChild(card);
+            });
+
+            const selectedDb = allDatabases[selectedTopicKey] || [];
+            document.getElementById("selectedTopicTitle").innerText = (selectedTopicKey === 'ALL') ? '全部綜合' : (isCustomTopicKey(selectedTopicKey) ? `AI｜${displayTopicName(selectedTopicKey)}` : selectedTopicKey);
+            document.getElementById("selectedTopicCount").innerText = (selectedTopicKey === 'ALL') ? totalCount : selectedDb.length;
+        }
+
+        function selectTopic(key) {
+            selectedTopicKey = key;
+            renderTopicsGrid();
+            playBeep(900, 0.05);
+        }
+
+        function setAIGenerationStatus(message, percent = 10, done = false) {
+            const box = document.getElementById("aiGenerationStatus");
+            const text = document.getElementById("aiStatusText");
+            const bar = document.getElementById("aiStatusBar");
+            const spinner = document.getElementById("aiStatusSpinner");
+            box.classList.remove("hidden");
+            text.innerText = message;
+            bar.style.width = `${Math.max(5, Math.min(100, percent))}%`;
+            if (done) {
+                spinner.classList.add("hidden");
+            } else {
+                spinner.classList.remove("hidden");
+            }
+        }
+
+        function beginAIProgressAnimation() {
+            clearInterval(aiGenerationProgressTimer);
+            const steps = [
+                [18, "正在理解你輸入的主題…"],
+                [34, "正在搜尋相關詞彙與常見用語…"],
+                [52, "正在分析每個詞的注音開頭…"],
+                [70, "正在把相同注音組合分組…"],
+                [84, "正在檢查難度、提示與題目品質…"],
+                [92, "題數不足時會自動補搜，快完成了…"]
+            ];
+            let index = 0;
+            setAIGenerationStatus(steps[0][1], steps[0][0]);
+            aiGenerationProgressTimer = setInterval(() => {
+                index = Math.min(index + 1, steps.length - 1);
+                setAIGenerationStatus(steps[index][1], steps[index][0]);
+            }, 1800);
+        }
+
+        function stopAIProgressAnimation() {
+            clearInterval(aiGenerationProgressTimer);
+            aiGenerationProgressTimer = null;
+        }
+
+        async function generateAITopic() {
+            const topicInput = document.getElementById("aiTopicInput");
+            const topic = topicInput.value.trim();
+            const difficulty = document.getElementById("aiDifficulty").value;
+            const mode = document.getElementById("aiMode").value;
+            const accessCode = document.getElementById("aiAccessCode").value;
+            const requestedCount = Math.min(parseInt(document.getElementById("selectQuestionCount").value, 10) || 10, 20);
+            const resultBox = document.getElementById("aiGenerationResult");
+            const button = document.getElementById("btnGenerateAI");
+            const buttonText = document.getElementById("aiGenerateText");
+            const buttonIcon = document.getElementById("aiGenerateIcon");
+
+            if (!topic) {
+                showToast("請先輸入主題", "例如：棒球、台東景點、布農族文化、聖經人物。");
+                topicInput.focus();
+                return;
+            }
+            if (location.protocol === "file:") {
+                showToast("AI 功能需要部署", "直接雙擊 HTML 可玩固定題庫，但 AI 動態出題必須透過部署後的網址使用。");
+                setAIGenerationStatus("目前是本機檔案模式；請依 README 部署後再使用 AI 出題。", 100, true);
+                return;
+            }
+
+            button.disabled = true;
+            buttonText.innerText = "正在建立題庫…";
+            buttonIcon.className = "fa-solid fa-spinner fa-spin";
+            resultBox.classList.add("hidden");
+            resultBox.innerHTML = "";
+            beginAIProgressAnimation();
+
+            try {
+                const response = await fetch("/api/generate-topic", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        topic,
+                        difficulty,
+                        mode,
+                        count: requestedCount,
+                        accessCode
+                    })
+                });
+
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(payload.error || `建立題庫失敗（HTTP ${response.status}）`);
+                }
+                if (!payload.questions || !Array.isArray(payload.questions) || payload.questions.length === 0) {
+                    throw new Error("AI 沒有回傳可用題目，請換一個主題或改用智慧延伸模式。");
+                }
+
+                const customKey = `AI｜${payload.topic || topic}`;
+                CUSTOM_TOPIC_DATABASES[customKey] = payload.questions.map(q => ({
+                    zhuyin: q.zhuyin,
+                    answers: q.answers.map(a => ({
+                        word: a.word,
+                        clue: a.clue
+                    })),
+                    __ai: true
+                }));
+                persistCustomTopicDatabases();
+                selectedTopicKey = customKey;
+                renderTopicsGrid();
+                stopAIProgressAnimation();
+                setAIGenerationStatus(`完成！已建立 ${payload.questions.length} 題並通過程式檢核。`, 100, true);
+
+                const modeLabel = payload.mode === "strict" ? "嚴格主題" : "智慧延伸";
+                const difficultyLabel = ({ easy: "簡單", standard: "標準", challenge: "挑戰" })[payload.difficulty] || payload.difficulty;
+                const sourceCount = Array.isArray(payload.sources) ? payload.sources.length : 0;
+                resultBox.innerHTML = `
+                    <div class="flex items-start gap-2">
+                        <i class="fa-solid fa-circle-check text-emerald-400 mt-0.5"></i>
+                        <div class="min-w-0">
+                            <div class="font-black text-emerald-300">AI 題庫「${escapeHTML(payload.topic || topic)}」建立完成</div>
+                            <div class="text-slate-300 mt-1">${payload.questions.length} 題 · ${escapeHTML(difficultyLabel)} · ${escapeHTML(modeLabel)}${sourceCount ? ` · 參考 ${sourceCount} 個網路來源` : ""}</div>
+                            <div class="text-slate-500 mt-1">已自動儲存在這台瀏覽器，並設為目前競賽主題。直接按左側「開始正式競賽」即可。</div>
+                        </div>
+                    </div>
+                `;
+                resultBox.classList.remove("hidden");
+                showToast("AI 題庫完成", `已建立 ${payload.questions.length} 題「${escapeHTML(payload.topic || topic)}」，可以立即開始！`);
+                playBeep(1100, 0.1, 'triangle');
+            } catch (error) {
+                stopAIProgressAnimation();
+                console.error(error);
+                setAIGenerationStatus("建立失敗；固定題庫仍可正常使用。", 100, true);
+                resultBox.innerHTML = `
+                    <div class="flex items-start gap-2 text-rose-300">
+                        <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
+                        <div>
+                            <div class="font-black">AI 動態題庫建立失敗</div>
+                            <div class="text-slate-300 mt-1">${escapeHTML(error.message || "未知錯誤")}</div>
+                            <div class="text-slate-500 mt-1">請檢查 API Key、部署設定或網路，再重新嘗試；原本的固定題庫不受影響。</div>
+                        </div>
+                    </div>
+                `;
+                resultBox.classList.remove("hidden");
+                showToast("AI 出題失敗", escapeHTML(error.message || "請稍後再試。"));
+            } finally {
+                button.disabled = false;
+                buttonText.innerText = "搜尋並建立題庫";
+                buttonIcon.className = "fa-solid fa-wand-magic-sparkles";
+            }
+        }
+
+        function setTimerSec(sec) {
+            selectedTimerDuration = sec;
+            remainingSeconds = sec;
+            document.querySelectorAll(".btn-timer-sec").forEach(btn => {
+                if (btn.innerText.includes(sec + 's')) {
+                    btn.className = "btn-timer-sec bg-indigo-600 text-white font-bold py-2 rounded-xl text-xs border border-indigo-500 transition";
+                } else {
+                    btn.className = "btn-timer-sec bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs border border-slate-700 transition";
+                }
+            });
+            playBeep(800, 0.05);
+        }
+
+        // Fisher-Yates shuffle：比 Array.sort(Math.random) 更穩定，也讓補題後能整池重新亂序。
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function startGame() {
+            teamAName = document.getElementById("inputTeamA").value || "紅隊";
+            teamBName = document.getElementById("inputTeamB").value || "藍隊";
+            totalQuestionsCount = parseInt(document.getElementById("selectQuestionCount").value, 10);
+            scoreA = 0;
+            scoreB = 0;
+            currentQuestionIndex = 0;
+            questionViewStates = [];
+
+            const allDatabases = getAllTopicDatabases();
+            let selectedTopicPool = [];
+            let otherTopicPool = [];
+            if (selectedTopicKey === 'ALL') {
+                Object.entries(allDatabases).forEach(([key, list]) => {
+                    selectedTopicPool = selectedTopicPool.concat(list.map(q => ({ ...q, __category: key })));
+                });
+            } else {
+                selectedTopicPool = (allDatabases[selectedTopicKey] || []).map(q => ({ ...q, __category: selectedTopicKey }));
+
+                // 內建主題維持 v2 行為：題數不足時才從其他分類補題。
+                // AI 題庫則不跨題庫補題，避免自訂主題被其他類別稀釋。
+                if (!isCustomTopicKey(selectedTopicKey)) {
+                    Object.keys(allDatabases).forEach(key => {
+                        if (key !== selectedTopicKey) {
+                            otherTopicPool = otherTopicPool.concat(allDatabases[key].map(q => ({ ...q, __category: key })));
+                        }
+                    });
+                }
+            }
+
+            if (selectedTopicPool.length === 0) {
+                showToast("無可用題目", "請先選擇包含題目的主題，或建立一個 AI 題庫。");
+                return;
+            }
+
+            if (isCustomTopicKey(selectedTopicKey) && selectedTopicPool.length < totalQuestionsCount) {
+                activeQuestionsPool = selectedTopicPool;
+                totalQuestionsCount = selectedTopicPool.length;
+                showToast("AI 題庫題數調整", `這個 AI 題庫目前有 ${selectedTopicPool.length} 題，本場將以全部題目進行，不混入其他主題。`);
+            } else if (selectedTopicKey !== 'ALL' && selectedTopicPool.length < totalQuestionsCount) {
+                shuffleArray(otherTopicPool);
+                const neededCount = totalQuestionsCount - selectedTopicPool.length;
+                const extraQuestions = otherTopicPool.slice(0, neededCount);
+                activeQuestionsPool = selectedTopicPool.concat(extraQuestions);
+                showToast("題庫自動補充", `『${escapeHTML(selectedTopicKey)}』原有 ${selectedTopicPool.length} 題，已跨主題補充 ${extraQuestions.length} 題，並將全部題目重新混合亂序！`);
+            } else {
+                activeQuestionsPool = selectedTopicPool;
+            }
+
+            // 補題完成後，才針對整份競賽題池做最後一次亂序。
+            shuffleArray(activeQuestionsPool);
+
+            const maxAvailable = activeQuestionsPool.length;
+            totalQuestionsCount = Math.min(totalQuestionsCount, maxAvailable);
+
+            // Update UI Labels
+            document.getElementById("displayTeamAName").innerText = teamAName;
+            document.getElementById("displayTeamBName").innerText = teamBName;
+            document.getElementById("displayScoreA").innerText = scoreA;
+            document.getElementById("displayScoreB").innerText = scoreB;
+            document.getElementById("totalQNum").innerText = totalQuestionsCount;
+            switchPage("pageQuestion");
+            loadCurrentQuestion();
+        }
+
+        function loadCurrentQuestion() {
+            if (currentQuestionIndex >= totalQuestionsCount) {
+                endGame();
+                return;
+            }
+            if (currentQuestionIndex < 0) currentQuestionIndex = 0;
+
+            document.getElementById("currentQNum").innerText = currentQuestionIndex + 1;
+            const qData = activeQuestionsPool[currentQuestionIndex];
+            const rawCategory = qData.__category || (selectedTopicKey === 'ALL' ? '綜合題型' : selectedTopicKey);
+            document.getElementById("currentCategoryBadge").innerText = isCustomTopicKey(rawCategory) ? `AI｜${displayTopicName(rawCategory)}` : rawCategory;
+            
+            // Render Zhuyin Big Display Cards
+            const container = document.getElementById("zhuyinContainer");
+            container.innerHTML = "";
+            qData.zhuyin.forEach(char => {
+                const box = document.createElement("div");
+                box.className = "w-24 h-28 sm:w-36 sm:h-44 bg-gradient-to-br from-indigo-900 to-slate-900 border-2 border-indigo-400/50 rounded-2xl flex items-center justify-center font-black text-5xl sm:text-7xl text-amber-300 shadow-2xl transition transform hover:scale-105";
+                box.innerText = char;
+                container.appendChild(box);
+            });
+            
+            // Render Answer Box
+            const answersList = document.getElementById("answerWordsList");
+            answersList.innerHTML = "";
+            qData.answers.forEach(ans => {
+                const tag = document.createElement("span");
+                tag.className = "bg-indigo-950 border border-indigo-800 text-indigo-200 font-bold px-3 py-1.5 rounded-xl text-sm sm:text-base";
+                tag.innerText = ans.word;
+                answersList.appendChild(tag);
+            });
+
+            // 每題的提示順序只建立一次，這樣回上一題時不會重新洗掉提示順序。
+            if (!Array.isArray(qData.hintOrder) || qData.hintOrder.length !== qData.answers.length) {
+                qData.hintOrder = qData.answers.map((_, idx) => idx);
+                shuffleArray(qData.hintOrder);
+            }
+            if (typeof qData.currentHintStep !== 'number') qData.currentHintStep = 0;
+
+            const savedState = questionViewStates[currentQuestionIndex];
+            const answerBox = document.getElementById("answerBox");
+            const hintBox = document.getElementById("hintBox");
+            const answerBtn = document.getElementById("btnToggleAnswer");
+
+            // 先清除當前計時器，避免切題時同時有兩個 interval。
+            clearInterval(timerInterval);
+            timerInterval = null;
+
+            if (savedState) {
+                // 回到看過的題目：完整恢復當時畫面與計時狀態。
+                qData.currentHintStep = savedState.currentHintStep || 0;
+                remainingSeconds = savedState.remainingSeconds;
+                isTimerPaused = savedState.isTimerPaused;
+
+                if (savedState.answerVisible) {
+                    answerBox.classList.remove("hidden");
+                    answerBtn.innerHTML = `<i class="fa-solid fa-eye-slash mr-2"></i>隱藏解答`;
+                } else {
+                    answerBox.classList.add("hidden");
+                    answerBtn.innerHTML = `<i class="fa-solid fa-eye mr-2"></i>顯示解答 (快捷鍵 A)`;
+                }
+
+                if (savedState.hintVisible) {
+                    document.getElementById("hintText").innerHTML = savedState.hintHTML || "";
+                    hintBox.classList.remove("hidden");
+                } else {
+                    hintBox.classList.add("hidden");
+                    document.getElementById("hintText").innerHTML = "";
+                }
+
+                updateTimerDisplay();
+                updatePauseButtonUI();
+                if (remainingSeconds > 0 && !isTimerPaused) startTimer();
+            } else {
+                // 第一次進入這題：使用乾淨狀態與完整倒數。
+                answerBox.classList.add("hidden");
+                hintBox.classList.add("hidden");
+                document.getElementById("hintText").innerHTML = "";
+                answerBtn.innerHTML = `<i class="fa-solid fa-eye mr-2"></i>顯示解答 (快捷鍵 A)`;
+                qData.currentHintStep = 0;
+                resetTimer();
+            }
+
+            updatePrevButtonState();
+        }
+
+        function showHint() {
+            const qData = activeQuestionsPool[currentQuestionIndex];
+            if (!qData || !qData.answers || qData.answers.length === 0) return;
+            
+            const hintBox = document.getElementById("hintBox");
+            const hintText = document.getElementById("hintText");
+            
+            // 使用餘數運算符（%），這樣即便一直按下去，也能完美循環回第一個
+            // currentHintStep 預設為 0，按一下變 1、再按變 2、再按變 3
+            // 例如總共3個提示，0%3=0, 1%3=1, 2%3=2, 3%3=0 (回到第一個)
+            const arrayIndexToPick = qData.currentHintStep % qData.hintOrder.length;
+            
+            // 根據剛才計算出的索引，去我們打亂過的「hintOrder」找對應的答案索引
+            const targetAnswerIndex = qData.hintOrder[arrayIndexToPick];
+            const targetAnswer = qData.answers[targetAnswerIndex];
+            
+            // 計算目前是顯示第幾個提示 (用於介面顯示 1/3, 2/3, 3/3)
+            const displayStep = arrayIndexToPick + 1;
+            const totalHints = qData.answers.length;
+            
+            // 組合提示訊息，顯示當前對應的情境提示
+            let msg = `<span class="text-amber-400 text-sm block mb-1">【隨機提示 ${displayStep} / ${totalHints}】</span>${escapeHTML(targetAnswer.clue)}`;
+            
+            hintText.innerHTML = msg;
+            hintBox.classList.remove("hidden");
+            playBeep(950, 0.08, 'triangle');
+            
+            // 每執行一次，將點擊次數 +1，讓下一次點擊時可以切換到下一個提示
+            qData.currentHintStep++;
+        }
+
+        function resetTimer() {
+            clearInterval(timerInterval);
+            remainingSeconds = selectedTimerDuration;
+            isTimerPaused = false;
+            updateTimerDisplay();
+            updatePauseButtonUI();
+            startTimer();
+        }
+
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (!isTimerPaused) {
+                    remainingSeconds--;
+                    updateTimerDisplay();
+                    if (remainingSeconds <= 3 && remainingSeconds > 0) {
+                        playBeep(1000, 0.08, 'sawtooth');
+                    }
+                    if (remainingSeconds <= 0) {
+                        remainingSeconds = 0;
+                        clearInterval(timerInterval);
+                        timerInterval = null;
+                        playBuzzer();
+                        showToast("時間到！", "請主持人結算該回合搶答分數。");
+                    }
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            document.getElementById("timerText").innerText = remainingSeconds;
+            // Circular SVG stroke offset
+            const circle = document.getElementById("timerProgressCircle");
+            const maxOffset = 250;
+            const percentage = Math.max(0, Math.min(1, remainingSeconds / selectedTimerDuration));
+            const offset = maxOffset - (maxOffset * percentage);
+            circle.style.strokeDashoffset = offset;
+            
+            if (remainingSeconds <= 3) {
+                circle.classList.remove("stroke-indigo-500");
+                circle.classList.add("stroke-rose-500", "animate-pulse");
+            } else {
+                circle.classList.remove("stroke-rose-500", "animate-pulse");
+                circle.classList.add("stroke-indigo-500");
+            }
+        }
+
+        function togglePauseTimer() {
+            isTimerPaused = !isTimerPaused;
+            updatePauseButtonUI();
+            playBeep(700, 0.05);
+        }
+
+        function updatePauseButtonUI() {
+            const icon = document.getElementById("pauseIcon");
+            const text = document.getElementById("pauseText");
+            if (isTimerPaused) {
+                icon.className = "fa-solid fa-play mr-2";
+                text.innerText = "繼續";
+                document.getElementById("btnPauseTimer").classList.replace("text-amber-300", "text-emerald-400");
+            } else {
+                icon.className = "fa-solid fa-pause mr-2";
+                text.innerText = "暫停";
+                document.getElementById("btnPauseTimer").classList.replace("text-emerald-400", "text-amber-300");
+            }
+        }
+
+        function addExtraTime(sec) {
+            const wasExpired = remainingSeconds <= 0;
+            remainingSeconds += sec;
+            updateTimerDisplay();
+            if (wasExpired && !isTimerPaused) startTimer();
+            playBeep(600, 0.05);
+        }
+
+        function addScore(team, points) {
+            if (team === 'A') {
+                scoreA = Math.max(0, scoreA + points);
+                document.getElementById("displayScoreA").innerText = scoreA;
+            } else {
+                scoreB = Math.max(0, scoreB + points);
+                document.getElementById("displayScoreB").innerText = scoreB;
+            }
+            playBeep(points > 0 ? 800 : 400, 0.05);
+        }
+
+        function toggleAnswerVisibility() {
+            const answerBox = document.getElementById("answerBox");
+            const btn = document.getElementById("btnToggleAnswer");
+            if (answerBox.classList.contains("hidden")) {
+                answerBox.classList.remove("hidden");
+                btn.innerHTML = `<i class="fa-solid fa-eye-slash mr-2"></i>隱藏解答`;
+                playBeep(850, 0.1);
+            } else {
+                answerBox.classList.add("hidden");
+                btn.innerHTML = `<i class="fa-solid fa-eye mr-2"></i>顯示解答 (快捷鍵 A)`;
+            }
+        }
+
+        function saveCurrentQuestionState() {
+            if (currentQuestionIndex < 0 || currentQuestionIndex >= totalQuestionsCount) return;
+            const qData = activeQuestionsPool[currentQuestionIndex];
+            if (!qData) return;
+
+            questionViewStates[currentQuestionIndex] = {
+                remainingSeconds: remainingSeconds,
+                isTimerPaused: isTimerPaused,
+                answerVisible: !document.getElementById("answerBox").classList.contains("hidden"),
+                hintVisible: !document.getElementById("hintBox").classList.contains("hidden"),
+                hintHTML: document.getElementById("hintText").innerHTML,
+                currentHintStep: qData.currentHintStep || 0
+            };
+        }
+
+        function updatePrevButtonState() {
+            const btn = document.getElementById("btnPrevQuestion");
+            if (!btn) return;
+            btn.disabled = currentQuestionIndex <= 0;
+        }
+
+        function previousQuestion() {
+            if (currentQuestionIndex <= 0) {
+                updatePrevButtonState();
+                return;
+            }
+            saveCurrentQuestionState();
+            currentQuestionIndex--;
+            loadCurrentQuestion();
+        }
+
+        function nextQuestion() {
+            saveCurrentQuestionState();
+            currentQuestionIndex++;
+            loadCurrentQuestion();
+        }
+
+        function endGame() {
+            clearInterval(timerInterval);
+            document.getElementById("summaryTeamAName").innerText = teamAName;
+            document.getElementById("summaryTeamBName").innerText = teamBName;
+            document.getElementById("summaryScoreA").innerText = scoreA;
+            document.getElementById("summaryScoreB").innerText = scoreB;
+            
+            let winnerText = "";
+            if (scoreA > scoreB) winnerText = `${teamAName} 獲勝！`;
+            else if (scoreB > scoreA) winnerText = `${teamBName} 獲勝！`;
+            else winnerText = "雙方平手！";
+            
+            document.getElementById("winnerTitleText").innerText = winnerText;
+            switchPage("pageVictory");
+            
+            playVictorySound();
+            
+            // Confetti effect (skip gracefully if CDN is unavailable)
+            if (typeof confetti === 'function') {
+            var duration = 3000;
+            var end = Date.now() + duration;
+            (function frame() {
+                confetti({
+                    particleCount: 5,
+                    angle: 60,
+                    spread: 55,
+                    origin: { x: 0 },
+                    colors: ['#f87171', '#60a5fa', '#fbbf24']
+                });
+                confetti({
+                    particleCount: 5,
+                    angle: 120,
+                    spread: 55,
+                    origin: { x: 1 },
+                    colors: ['#f87171', '#60a5fa', '#fbbf24']
+                });
+                if (Date.now() < end) {
+                    requestAnimationFrame(frame);
+                }
+            }());
+            }
+        }
+
+        function showToast(title, message) {
+            const container = document.getElementById("toastContainer");
+            const toast = document.createElement("div");
+            toast.className = "bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-xl shadow-lg transform transition-all duration-300 translate-y-10 opacity-0 flex flex-col pointer-events-auto mb-2";
+            toast.innerHTML = `
+                <strong class="text-sm text-indigo-400">${title}</strong>
+                <span class="text-xs text-slate-300 mt-1">${message}</span>
+            `;
+            container.appendChild(toast);
+            
+            // Animate in
+            setTimeout(() => {
+                toast.classList.remove("translate-y-10", "opacity-0");
+            }, 10);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.classList.add("translate-y-10", "opacity-0");
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }, 3000);
+        }
+
+        function setupKeyboardShortcuts() {
+            document.addEventListener('keydown', (e) => {
+                if (document.getElementById("pageQuestion").classList.contains("hidden")) return;
+                
+                // Exclude shortcuts if user is typing in an input
+                if (e.target.tagName === 'INPUT') return;
+                if (e.key.toLowerCase() === 'h') {
+                    showHint();
+                } else if (e.key.toLowerCase() === 'a') {
+                    toggleAnswerVisibility();
+                } else if (e.code === 'Space') {
+                    e.preventDefault(); // Prevent scrolling
+                    togglePauseTimer();
+                } else if (e.key.toLowerCase() === 'f') {
+                    toggleFullscreen();
+                }
+            });
+        }
+    </script>
+</body>
+</html>

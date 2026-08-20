@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/generate-topic.js": {
+      "maxDuration": 60
+    }
+  }
+}
